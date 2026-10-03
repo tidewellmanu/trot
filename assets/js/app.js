@@ -13,17 +13,46 @@
     return {...row,image:urls[0]||"",images:urls,seller:row.seller_name||row.seller||"Seller",phone:row.seller_phone||"",condition:row.condition||"Used"};
   }
   async function loadListings(){
-    const c=client(); if(!c)return false;
-    const {data,error}=await c.from("listings").select("*").eq("status","active").order("created_at",{ascending:false});
-    if(error){console.error("TrotroMall listings:",error);state.listingsError=error.message;renderAll();return false;}
+    const c=client();
+    const cfg=window.TROTRO_SUPABASE_CONFIG||{};
+    let rows=null,error=null;
+    if(c){
+      const r=await c.from("listings").select("*").eq("status","active").order("created_at",{ascending:false});
+      rows=r.data; error=r.error;
+    }
+    if(error||!Array.isArray(rows)){
+      try{
+        if(!cfg.url||!cfg.key)throw new Error(error?.message||"Supabase configuration unavailable");
+        const r=await fetch(cfg.url+"/rest/v1/listings?select=*&status=eq.active&order=created_at.desc",{headers:{apikey:cfg.key,Authorization:"Bearer "+cfg.key}});
+        if(!r.ok)throw new Error("Listings API returned "+r.status);
+        rows=await r.json(); error=null;
+      }catch(e){
+        console.error("TrotroMall listings:",error||e);
+        state.listingsError=(error?.message||e.message||"Could not load listings");
+        renderAll();
+        return false;
+      }
+    }
     state.listingsError=null;
-    const rows=data||[];
+    rows=rows||[];
     const ids=rows.map(x=>x.id);
     let imageRows=[];
-    if(ids.length){const r=await c.from("listing_images").select("listing_id,storage_path,position").in("listing_id",ids).order("position",{ascending:true});if(!r.error)imageRows=r.data||[];}
+    if(ids.length){
+      if(c){
+        const r=await c.from("listing_images").select("listing_id,storage_path,position").in("listing_id",ids).order("position",{ascending:true});
+        if(!r.error)imageRows=r.data||[];
+      }
+      if(!imageRows.length){
+        try{
+          const url=cfg.url+"/rest/v1/listing_images?select=listing_id,storage_path,position&listing_id=in.("+ids.map(encodeURIComponent).join(",")+")&order=position.asc";
+          const r=await fetch(url,{headers:{apikey:cfg.key,Authorization:"Bearer "+cfg.key}});
+          if(r.ok)imageRows=await r.json();
+        }catch(_){ }
+      }
+    }
+    const storageUrl=p=>{if(!p)return "";if(/^https?:\\/\\//i.test(p))return p;if(c)return c.storage.from("listing-photos").getPublicUrl(p).data.publicUrl;return cfg.url+"/storage/v1/object/public/listing-photos/"+String(p).split("/").map(encodeURIComponent).join("/");};
     const grouped={};
-    const storageUrl=p=>{if(!p)return "";if(/^https?:\/\//i.test(p))return p;return c.storage.from("listing-photos").getPublicUrl(p).data.publicUrl;};
-    imageRows.forEach(i=>{const url=storageUrl(i.url||i.public_url||i.storage_path);if(url)(grouped[i.listing_id] ||= []).push({url,position:i.position??0});});
+    imageRows.forEach(i=>{const url=storageUrl(i.storage_path);if(url)(grouped[i.listing_id] ||= []).push({url,position:i.position??0});});
     state.data.listings=rows.map(x=>{
       const fromRows=(grouped[x.id]||[]).sort((a,b)=>a.position-b.position).map(i=>i.url);
       const fromListing=Array.isArray(x.images)?x.images.map(storageUrl).filter(Boolean):[];
