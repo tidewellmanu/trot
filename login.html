@@ -1,3 +1,54 @@
 <!doctype html><html lang="en-GH"><head><meta charset="utf-8"><link rel="icon" type="image/png" sizes="512x512" href="assets/images/favicon.png"><link rel="apple-touch-icon" href="assets/images/apple-touch-icon.png"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><title>Sign in | TrotroMall Ghana</title><meta name="description" content="Sign in to manage your TrotroMall listings and account."><meta name="robots" content="index,follow"><link rel="canonical" href="https://trotromall.com/login.html"><link rel="stylesheet" href="assets/css/style.css"></head><body><div id="siteHeader"></div><main class="page"><div class="container auth-wrap"><div class="auth"><h1>Sign in</h1><div id="authMessage" class="notice" hidden></div><form id="loginForm"><div class="field" style="margin-bottom:12px"><label for="email">Email</label><input id="email" name="email" type="email" required autocomplete="email" placeholder="you@example.com"></div><div class="field" style="margin-bottom:12px"><label for="password">Password</label><input id="password" name="password" type="password" required autocomplete="current-password"></div><button class="primary-btn" style="width:100%" id="loginButton">Sign in</button></form><button id="googleButton" class="contact-btn" type="button">Continue with Google</button><p style="text-align:center;color:#a1a8b3">Need an account? <a class="link-button" href="signup.html">Create account</a></p><p style="text-align:center"><button id="resetButton" class="link-button" type="button">Forgot password?</button></p></div></div></main><div id="siteFooter"></div><script src="assets/js/data.js"></script><script src="assets/js/app.js?v=20261003-3"></script><script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script><script src="assets/js/config.js"></script><script src="assets/js/supabase-client.js"></script><script>
-(async()=>{const form=document.getElementById('loginForm'),msg=document.getElementById('authMessage'),btn=document.getElementById('loginButton'),next=new URLSearchParams(location.search).get('next')||'index.html';const show=t=>{msg.hidden=false;msg.textContent=t;};async function client(){if(window.TROTRO_SUPABASE?.ready&&window.TROTRO_SUPABASE.client)return window.TROTRO_SUPABASE.client;await new Promise((resolve,reject)=>{const done=()=>{clearTimeout(timer);resolve();};document.addEventListener('trotro:supabase-ready',done,{once:true});const timer=setTimeout(()=>{document.removeEventListener('trotro:supabase-ready',done);reject(new Error('Supabase connection is not ready.'))},10000);});if(!window.TROTRO_SUPABASE?.client)throw new Error('Supabase connection is unavailable.');return window.TROTRO_SUPABASE.client;}form.addEventListener('submit',async e=>{e.preventDefault();btn.disabled=true;try{const c=await client(),fd=new FormData(form);const {error}=await c.auth.signInWithPassword({email:fd.get('email'),password:fd.get('password')});if(error)throw error;location.href=next;}catch(e){show(e.message||'Sign in failed.');}finally{btn.disabled=false;}});document.getElementById('resetButton').onclick=async()=>{try{const c=await client(),email=document.getElementById('email').value.trim();if(!email)return show('Enter your email first.');const {error}=await c.auth.resetPasswordForEmail(email,{redirectTo:location.origin+'/account.html'});if(error)throw error;show('If the account exists, a password reset email has been sent.');}catch(e){show(e.message||'Could not start password reset.');}};})();
-document.getElementById('googleButton').onclick=async()=>{try{const c=await client();const {error}=await c.auth.signInWithOAuth({provider:'google',options:{redirectTo:location.origin+'/'+next}});if(error)throw error;}catch(e){show(e.message||'Google sign in is unavailable.');}};</script></body></html>
+(async()=>{
+ const form=document.getElementById('loginForm'),msg=document.getElementById('authMessage'),btn=document.getElementById('loginButton');
+ const nextRaw=new URLSearchParams(location.search).get('next')||'index.html';
+ const next=/^(https?:|javascript:|data:)/i.test(nextRaw)?'index.html':nextRaw;
+ const target=next.startsWith('/')?next:'/'+next;
+ const show=t=>{msg.hidden=false;msg.textContent=t;};
+ async function client(){
+   if(window.TROTRO_SUPABASE?.ready&&window.TROTRO_SUPABASE.client)return window.TROTRO_SUPABASE.client;
+   await new Promise((resolve,reject)=>{
+     const done=()=>{clearTimeout(timer);resolve();};
+     document.addEventListener('trotro:supabase-ready',done,{once:true});
+     const timer=setTimeout(()=>{document.removeEventListener('trotro:supabase-ready',done);reject(new Error('Supabase connection is not ready.'));},10000);
+   });
+   if(!window.TROTRO_SUPABASE?.client)throw new Error('Supabase connection is unavailable.');
+   return window.TROTRO_SUPABASE.client;
+ }
+ try{
+   const c=await client();
+   const {data:{session}}=await c.auth.getSession();
+   if(session){location.replace(target);return;}
+   c.auth.onAuthStateChange((event,session)=>{
+     if(session&&(event==='SIGNED_IN'||event==='INITIAL_SESSION')) location.replace(target);
+   });
+ }catch(e){console.warn(e);}
+ form.addEventListener('submit',async e=>{
+   e.preventDefault();btn.disabled=true;show('Signing in…');
+   try{
+     const c=await client(),fd=new FormData(form);
+     const {data,error}=await c.auth.signInWithPassword({email:fd.get('email'),password:fd.get('password')});
+     if(error)throw error;
+     if(!data?.session)throw new Error('Sign in completed but no session was created. Please try again.');
+     await c.auth.getSession();
+     location.replace(target);
+   }catch(e){show(e.message||'Sign in failed.');}
+   finally{btn.disabled=false;}
+ });
+ document.getElementById('resetButton').onclick=async()=>{
+   try{
+     const c=await client(),email=document.getElementById('email').value.trim();
+     if(!email)return show('Enter your email first.');
+     const {error}=await c.auth.resetPasswordForEmail(email,{redirectTo:location.origin+'/account.html'});
+     if(error)throw error;show('If the account exists, a password reset email has been sent.');
+   }catch(e){show(e.message||'Could not start password reset.');}
+ };
+ document.getElementById('googleButton').onclick=async()=>{
+   try{
+     const c=await client();
+     const {error}=await c.auth.signInWithOAuth({provider:'google',options:{redirectTo:location.origin+target}});
+     if(error)throw error;
+   }catch(e){show(e.message||'Google sign in is unavailable.');}
+ };
+})();
+</script></script></body></html>
