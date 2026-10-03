@@ -30,7 +30,9 @@
      const {data,error}=await c.auth.signInWithPassword({email:fd.get('email'),password:fd.get('password')});
      if(error)throw error;
      if(!data?.session)throw new Error('Sign in completed but no session was created. Please try again.');
-     await c.auth.getSession();
+     const verified=await c.auth.getUser();
+     const name=String(verified.data?.user?.user_metadata?.full_name||verified.data?.user?.user_metadata?.name||"").trim();
+     if(name)try{localStorage.setItem("trotroProfileName",name);}catch(_){}
      location.replace(target);
    }catch(e){show(e.message||'Sign in failed.');}
    finally{btn.disabled=false;}
