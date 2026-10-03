@@ -1,0 +1,7 @@
+User-agent: *
+Allow: /
+Disallow: /admin/
+Disallow: /supabase/
+Disallow: /payment-result.html
+Disallow: /assets/js/config.js
+Sitemap: https://trotromall.com/sitemap.xml

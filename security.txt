@@ -1,0 +1,3 @@
+Contact: mailto:security@trotromall.com
+Canonical: https://trotromall.com/security.txt
+Policy: https://trotromall.com/safety.html

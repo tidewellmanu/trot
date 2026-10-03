@@ -1,0 +1,10 @@
+{
+  "name":"TrotroMall Ghana",
+  "short_name":"TrotroMall",
+  "start_url":"/",
+  "display":"standalone",
+  "background_color":"#f5f7fa",
+  "theme_color":"#e63333",
+  "description":"Buy and sell in Ghana on TrotroMall.",
+  "icons":[{"src":"/assets/images/favicon.png","sizes":"512x512","type":"image/png","purpose":"any"}]
+}
