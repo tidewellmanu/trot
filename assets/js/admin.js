@@ -14,9 +14,36 @@
     const logout=$("#adminLogout");
     if(logout) logout.onclick=async()=>{try{await window.TROTRO_SUPABASE.client.auth.signOut();}finally{location.href="login.html";}};
   }
-  function dashboard(){
-    $("#stats").innerHTML=[["Users","1,284"],["Active listings",data.listings.length],["Pending moderation","18"],["Reports","7"]].map(x=>`<div class="stat"><small>${x[0]}</small><strong>${x[1]}</strong></div>`).join("");
-    $("#adminRecent").innerHTML=data.listings.slice(0,7).map(x=>`<tr><td>${esc(x.title)}</td><td>${esc(x.category)}</td><td>${esc(x.location)}</td><td><button class="action">Edit</button></td></tr>`).join("");
+  async function dashboard(){
+    const c=window.TROTRO_SUPABASE?.client;
+    const stats=$("#stats"), recent=$("#adminRecent");
+    if(!c||!stats||!recent)return;
+    stats.innerHTML='<div class="stat"><small>Loading</small><strong>…</strong></div>'.repeat(4);
+    try{
+      const [active,pending,allMessages]=await Promise.all([
+        c.from("listings").select("id",{count:"exact",head:true}).eq("status","active"),
+        c.from("listings").select("id",{count:"exact",head:true}).eq("status","pending"),
+        c.from("messages").select("id",{count:"exact",head:true})
+      ]);
+      const activeCount=active.count??0;
+      const pendingCount=pending.count??0;
+      const messageCount=allMessages.count??0;
+      stats.innerHTML=[
+        ["Active listings",activeCount],
+        ["Pending moderation",pendingCount],
+        ["Messages",messageCount],
+        ["Admin access","Active"]
+      ].map(x=>`<div class="stat"><small>${esc(x[0])}</small><strong>${esc(x[1])}</strong></div>`).join("");
+      const {data:listings,error}=await c.from("listings")
+        .select("id,title,category,location,created_at")
+        .order("created_at",{ascending:false}).limit(7);
+      if(error)throw error;
+      recent.innerHTML=(listings||[]).map(x=>`<tr><td>${esc(x.title)}</td><td>${esc(x.category)}</td><td>${esc(x.location)}</td><td><a class="action" href="listings.html">Manage</a></td></tr>`).join("")
+        || '<tr><td colspan="4">No listings yet.</td></tr>';
+    }catch(error){
+      stats.innerHTML='<div class="admin-card"><p>Could not load live dashboard statistics.</p></div>';
+      recent.innerHTML=`<tr><td colspan="4">${esc(error.message||"Could not load listings.")}</td></tr>`;
+    }
   }
   function homepage(){
     $("#slidesEditor").innerHTML=data.slides.map((s,i)=>`<div class="admin-card" data-slide="${i}" style="margin-bottom:10px"><div class="field"><label>Slide title</label><input value="${esc(s.title)}" data-key="title"></div><div class="field" style="margin-top:10px"><label>Text</label><input value="${esc(s.text)}" data-key="text"></div><div class="field" style="margin-top:10px"><label>Image URL</label><input value="${esc(s.image)}" data-key="image"></div><div style="margin-top:10px"><button class="action danger" data-delete-slide="${i}">Delete slide</button></div></div>`).join("");
