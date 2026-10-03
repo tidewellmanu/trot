@@ -1,7 +1,7 @@
 (function(){
   const D=window.TROTRO_DATA||{settings:{siteName:"TrotroMall",currency:"GH₵"},categories:[],slides:[],ads:[],listings:[]};
   const $=(s,r=document)=>r.querySelector(s), $$=(s,r=document)=>[...r.querySelectorAll(s)];
-  const state={saved:new Set(JSON.parse(localStorage.getItem("trotroSaved")||"[]")),data:{...D,listings:[]},user:null};
+  let savedIds=[];try{savedIds=JSON.parse(localStorage.getItem("trotroSaved")||"[]");if(!Array.isArray(savedIds))savedIds=[];}catch(_){savedIds=[];}const state={saved:new Set(savedIds),data:{...D,listings:[]},user:null};
   window.TROTRO=state;
   const esc=v=>String(v??"").replace(/[&<>"']/g,m=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#039;"}[m]));
   const saveSaved=()=>localStorage.setItem("trotroSaved",JSON.stringify([...state.saved]));
@@ -72,4 +72,5 @@
   async function boot(){const c=client();if(!c||bootStarted)return;bootStarted=true;renderAll();if(!c){bootStarted=false;return;}c.auth.onAuthStateChange((_e,s)=>{state.user=s?.user||null;renderHeaderFooter();if($("#accountContent"))account();});const sessionResult=await Promise.race([c.auth.getSession(),new Promise(resolve=>setTimeout(()=>resolve({data:{session:null},error:new Error("Auth session timeout")}),5000))]);if(sessionResult?.data?.session)state.user=sessionResult.data.session.user;else if(sessionResult?.error)console.warn("TrotroMall auth session:",sessionResult.error);renderHeaderFooter();if($("#accountContent"))account();await loadListings();bootStarted=false;}
   document.addEventListener("DOMContentLoaded",()=>boot());
   document.addEventListener("trotro:supabase-ready",()=>boot());
+  window.addEventListener("load",()=>{setTimeout(()=>{if(client()&&!state.data.listings.length)loadListings();},1200);});
 })();
