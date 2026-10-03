@@ -73,7 +73,7 @@ img{max-width:100%;display:block}
 .meta{font-size:11px;color:var(--soft);margin-top:5px;display:flex;justify-content:space-between;gap:8px}
 .watch{position:absolute;right:8px;top:8px;border:0;background:#fff;width:30px;height:30px;border-radius:50%;box-shadow:0 1px 4px rgba(0,0,0,.14);color:#68778c}
 .watch.saved{color:var(--red)}
-.ad-box{background:#fff;border:1px solid var(--line);min-height:95px;padding:12px}
+.ad-link{display:block;color:inherit;text-decoration:none;cursor:pointer}.ad-link:hover{color:inherit;text-decoration:none}.ad-box{background:#fff;border:1px solid var(--line);min-height:95px;padding:12px}
 .ad-box img{width:100%;height:100px;object-fit:cover}
 .ad-label{font-size:10px;color:#a7adb7;text-transform:uppercase;letter-spacing:.06em;margin-bottom:7px}
 .category-columns{display:grid;grid-template-columns:repeat(3,1fr);gap:18px}
