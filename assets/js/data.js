@@ -35,9 +35,9 @@ window.TROTRO_DATA = {
     {title:"List your item in minutes",text:"Create a listing, add photos and start receiving enquiries.",image:"https://images.unsplash.com/photo-1556740749-887f6717d7e4?auto=format&fit=crop&w=1200&q=80",button:"Post a listing"}
   ],
   ads:[
-    {title:"Drive more enquiries",text:"Advertise your business on TrotroMall.",image:"https://images.unsplash.com/photo-1556742049-0cfed4f6a45d?auto=format&fit=crop&w=900&q=80",url:"#"},
-    {title:"Featured business spaces",text:"Put your brand in front of active buyers.",image:"https://images.unsplash.com/photo-1524758631624-e2822e304c36?auto=format&fit=crop&w=900&q=80",url:"#"},
-    {title:"Sell faster",text:"Use promoted placements for extra visibility.",image:"https://images.unsplash.com/photo-1556157382-97eda2d62296?auto=format&fit=crop&w=900&q=80",url:"#"}
+    {title:"Drive more enquiries",text:"Advertise your business on TrotroMall.",image:"https://images.unsplash.com/photo-1556742049-0cfed4f6a45d?auto=format&fit=crop&w=900&q=80",url:"advertise.html"},
+    {title:"Featured business spaces",text:"Put your brand in front of active buyers.",image:"https://images.unsplash.com/photo-1524758631624-e2822e304c36?auto=format&fit=crop&w=900&q=80",url:"advertise.html"},
+    {title:"Sell faster",text:"Use promoted placements for extra visibility.",image:"https://images.unsplash.com/photo-1556157382-97eda2d62296?auto=format&fit=crop&w=900&q=80",url:"advertise.html"}
   ],
   listings:[]
 };
