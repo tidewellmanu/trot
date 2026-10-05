@@ -1,0 +1,49 @@
+<!doctype html>
+<html lang="en-GH">
+<head>
+<meta charset="utf-8"><link rel="icon" type="image/png" sizes="512x512" href="assets/images/favicon.png"><link rel="apple-touch-icon" href="assets/images/apple-touch-icon.png"><meta name="theme-color" content="#e63333"><meta name="mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-title" content="TrotroMall"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Promote your listing for 7 days | TrotroMall</title>
+<meta name="description" content="Promote your TrotroMall listing for 7 days for GH₵50 using secure Ghana Mobile Money or card checkout.">
+<meta name="robots" content="index,follow,max-image-preview:large">
+<link rel="canonical" href="https://trotromall.com/advertise.html">
+<link rel="stylesheet" href="assets/css/style.css">
+<link rel="manifest" href="site.webmanifest"></head>
+<body><div id="siteHeader"></div>
+<main class="page"><div class="container">
+<div class="breadcrumbs">Home / Promote listing</div>
+<section class="payment-layout">
+<div class="payment-main">
+  <div class="payment-hero"><span class="eyebrow">Featured listing</span><h1>Get your listing seen first</h1><p>Put your listing in priority positions across TrotroMall for <strong>7 days</strong>.</p></div>
+  <div class="payment-card"><h2>GH₵50 for 7 days</h2><p class="muted">One simple promotional package. Your listing becomes eligible for featured placement while the promotion is active.</p>
+    <div class="payment-benefits"><div><strong>Priority placement</strong><span>Featured listings sort ahead of normal listings.</span></div><div><strong>7-day visibility</strong><span>Promotion runs for seven days after successful payment.</span></div><div><strong>Ghana-first checkout</strong><span>Mobile Money and card payment through Hubtel.</span></div></div>
+    <div class="momo-box"><h3>Mobile Money</h3><p>You will receive an instant Mobile Money PIN prompt on your phone to complete your <strong>GH₵50</strong> activation securely.</p><div class="momo-grid"><span>MTN MoMo</span><span>Telecel Cash</span><span>AT Money</span></div></div>
+    <div class="card-box"><strong>Cards</strong><span>Secure Hubtel hosted checkout is also available for supported bank cards.</span></div>
+    <div id="paymentMessage" class="notice" hidden></div>
+    <button id="startPayment" class="payment-cta">Continue to secure payment — GH₵50</button>
+    <p class="tiny">Payment credentials are never collected by TrotroMall. Checkout is handled by Hubtel. Your listing is activated only after server-side payment verification.</p>
+  </div>
+</div>
+<aside class="payment-side"><div class="panel"><div class="panel-title">How it works</div><ol class="steps"><li>Sign in to your TrotroMall account.</li><li>Select the listing you want to promote.</li><li>Pay GH₵50 through Hubtel.</li><li>Hubtel confirms the payment to our secure server.</li><li>Your listing receives 7 days of featured placement.</li></ol></div><div class="panel security-panel"><div class="panel-title">Secure payment</div><p>We do not ask for your Mobile Money PIN, card PIN or password.</p><p>Always complete the payment only on the official Hubtel checkout page.</p></div></aside>
+</section></div></main><div id="siteFooter"></div>
+<script src="assets/js/data.js"></script><script src="assets/js/app.js"></script><script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script><script src="assets/js/config.js"></script><script src="assets/js/supabase-client.js"></script>
+<script>
+(async()=>{
+ const msg=document.getElementById('paymentMessage'), btn=document.getElementById('startPayment');
+ const listingId=new URLSearchParams(location.search).get('listing_id');
+ function show(t,ok=false){msg.hidden=false;msg.className='notice '+(ok?'success':'');msg.textContent=t;}
+ if(!listingId){show('Choose a listing from your account to start a featured promotion.');btn.disabled=true;return;}
+ async function start(){
+  btn.disabled=true;btn.textContent='Preparing secure payment…';
+  try{
+   if(!window.TROTRO_SUPABASE?.ready) throw new Error('Supabase is not configured yet. Add the public project URL and publishable key in assets/js/config.js.');
+   const {data:{session}}=await TROTRO_SUPABASE.client.auth.getSession();
+   if(!session){location.href='login.html?next='+encodeURIComponent(location.pathname+'?listing_id='+listingId);return;}
+   const {data,error}=await TROTRO_SUPABASE.client.functions.invoke('initiate-hubtel-payment',{body:{listing_id:listingId}});
+   if(error) throw error;
+   if(!data?.checkoutUrl) throw new Error(data?.error||'No checkout URL returned.');
+   location.href=data.checkoutUrl;
+  }catch(e){show(e.message||'Payment could not be started.');btn.disabled=false;btn.textContent='Continue to secure payment — GH₵50';}
+ }
+ btn.addEventListener('click',start);
+})();
+</script></body></html>

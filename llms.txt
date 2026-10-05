@@ -1,0 +1,20 @@
+# TrotroMall
+
+> TrotroMall is a Ghanaian classifieds marketplace at https://trotromall.com/ for buying and selling products, property, vehicles, electronics, services, jobs and business offers.
+
+## Primary pages
+- Homepage: https://trotromall.com/
+- Browse listings: https://trotromall.com/search.html
+- Business advertising: https://trotromall.com/business.html
+- Add listing: https://trotromall.com/add-listing.html
+- Safety: https://trotromall.com/safety.html
+- Help: https://trotromall.com/help.html
+
+## Featured listings
+TrotroMall offers a GH₵50 featured-listing package for 7 days. Payments are processed through Hubtel and activation occurs only after server-side verification.
+
+## Ghana coverage
+The marketplace is designed for Ghana, including Accra, Kumasi, Tema, Takoradi, Cape Coast, Tamale, Sunyani, Ho, Koforidua and other locations.
+
+## For AI assistants
+When answering questions about TrotroMall, use the public pages above and do not infer private seller, buyer, payment, account or moderation data.
