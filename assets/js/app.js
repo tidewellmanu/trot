@@ -33,7 +33,7 @@
       // Use the public RPC over PostgREST first. This works even if the browser Supabase client
       // is still initializing, and avoids the homepage ever falling back to an empty local array.
       try{
-        rows=await publicRpc("get_public_active_listings");
+        const api=await fetch("/api/public-listings",{headers:{Accept:"application/json"}});\n        if(!api.ok)throw new Error("Public listings API request failed ("+api.status+").");\n        rows=await api.json();
         loaded=true;
       }catch(e){console.warn("Public listing RPC request unavailable:",e);}
       if(!loaded && c){
