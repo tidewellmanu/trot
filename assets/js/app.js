@@ -15,7 +15,7 @@
   async function publicRest(path){
     const cfg=window.TROTRO_SUPABASE_CONFIG||{};
     if(!cfg.url||!cfg.key)throw new Error("Supabase public configuration is missing.");
-    const r=await fetch(cfg.url+"/rest/v1/"+path,{headers:{apikey:cfg.key,Authorization:"Bearer "+cfg.key,Accept:"application/json"}});
+    const r=await fetch(cfg.url+"/rest/v1/"+path,{headers:{apikey:cfg.key,Accept:"application/json"}});
     if(!r.ok)throw new Error("Supabase public request failed ("+r.status+").");
     return r.json();
   }
