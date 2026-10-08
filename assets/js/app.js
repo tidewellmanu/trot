@@ -30,34 +30,36 @@
     return (async()=>{
       let rows=[], loaded=false;
       const c=client();
-      // Use the public RPC over PostgREST first. This works even if the browser Supabase client
-      // is still initializing, and avoids the homepage ever falling back to an empty local array.
-      try{
-        rows=await publicRpc("get_public_active_listings");
-        loaded=true;
-      }catch(e){console.warn("Public listing RPC request unavailable:",e);}
+      // Read active listings directly through the Supabase client first. This is the
+      // normal browser path and is protected by the public SELECT/RLS policy.
+      if(c){
+        try{
+          const r=await c.from("listings").select("*").eq("status","active").order("created_at",{ascending:false});
+          if(!r.error && Array.isArray(r.data) && r.data.length){rows=r.data;loaded=true;}
+          else if(r.error)console.warn("Supabase active listings query failed:",r.error);
+        }catch(e){console.warn("Supabase active listings query unavailable:",e);}
+      }
+      // If the client query returns no rows or is unavailable, use the public RPC.
+      if(!loaded){
+        try{
+          const rpc=await publicRpc("get_public_active_listings");
+          if(Array.isArray(rpc)){rows=rpc;loaded=true;}
+        }catch(e){console.warn("Public listing RPC request unavailable:",e);}
+      }
       if(!loaded && c){
         try{
           const rpc=await c.rpc("get_public_active_listings");
-          if(!rpc.error){rows=rpc.data||[];loaded=true;}
+          if(!rpc.error && Array.isArray(rpc.data)){rows=rpc.data;loaded=true;}
         }catch(e){console.warn("Public listing client RPC unavailable:",e);}
       }
       if(!loaded){
         try{
           rows=await publicRest("listings?select=*&status=eq.active&order=created_at.desc");
-          loaded=true;
+          loaded=Array.isArray(rows);
         }catch(restError){
-          if(c){
-            try{
-              const r=await c.from("listings").select("*").eq("status","active").order("created_at",{ascending:false});
-              if(!r.error){rows=r.data||[];loaded=true;}
-            }catch(e){}
-          }
-          if(!loaded){
-            console.error("TrotroMall public listings:",restError);
-            state.listingsError=restError.message||"Public listings could not be loaded.";
-            state.data.listings=[];renderAll();return false;
-          }
+          console.error("TrotroMall public listings:",restError);
+          state.listingsError=restError.message||"Public listings could not be loaded.";
+          state.data.listings=[];renderAll();return false;
         }
       }
       state.listingsError=null;
