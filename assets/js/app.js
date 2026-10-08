@@ -100,41 +100,48 @@
           condition:fd.get("condition")||"Used",seller_phone:String(fd.get("seller_phone")||"").trim()||null,status:"active",images:[]
         }).select("id").single();
         if(error)throw error; listingId=row.id;
-        const urls=[];
+        const urls=[],uploadErrors=[];
         for(let i=0;i<photos.length;i++){
           const f=photos[i],ext=(f.name.split(".").pop()||"jpg").toLowerCase();
           const path=`${state.user.id}/${listingId}/${crypto.randomUUID()}.${ext}`;
-          const up=await c.storage.from("listing-photos").upload(path,f,{contentType:f.type,upsert:false});
-          if(up.error)throw up.error;
-          uploadedPaths.push(path);
-          const publicUrl=c.storage.from("listing-photos").getPublicUrl(path)?.data?.publicUrl||"";
-          if(publicUrl)urls.push(publicUrl);
-          const ins=await c.from("listing_images").insert({listing_id:listingId,user_id:state.user.id,storage_path:path,position:i});
-          if(ins.error)console.warn("listing_images row could not be created; listing will still retain its image URL.",ins.error);
+          try{
+            const up=await c.storage.from("listing-photos").upload(path,f,{contentType:f.type,upsert:false});
+            if(up.error)throw up.error;
+            uploadedPaths.push(path);
+            const publicUrl=c.storage.from("listing-photos").getPublicUrl(path)?.data?.publicUrl||"";
+            if(publicUrl)urls.push(publicUrl);
+            const ins=await c.from("listing_images").insert({listing_id:listingId,user_id:state.user.id,storage_path:path,position:i});
+            if(ins.error)console.warn("listing_images row could not be created; listing will still retain its image URL.",ins.error);
+          }catch(uploadErr){
+            uploadErrors.push(f.name);
+            console.warn("Listing photo upload failed; keeping the listing published.",uploadErr);
+          }
         }
-        if(!urls.length)throw new Error("Photos could not be published. Check that the listing-photos storage bucket is public and its upload policy allows signed-in sellers.");
-        // Keep the listing active even if the auxiliary image-array update is rejected by RLS.
-        // The listing_images rows + public storage URLs are the canonical image fallback used by
-        // the homepage, listings page, detail page and seller dashboard.
-        const up=await c.from("listings").update({images:urls}).eq("id",listingId).eq("user_id",state.user.id).select("id,status,images").single();
-        if(up.error) console.warn("Listing image-array update failed; listing remains published and image rows will be used.",up.error);
+        // Never remove an active listing because an optional image/storage operation failed.
+        // Keep every successfully uploaded image and leave the listing publicly discoverable.
+        if(urls.length){
+          const up=await c.from("listings").update({images:urls}).eq("id",listingId).eq("user_id",state.user.id).select("id,status,images").single();
+          if(up.error)console.warn("Listing image-array update failed; listing remains published and image rows will be used.",up.error);
+        }
         const verify=await c.from("listings").select("id,status").eq("id",listingId).eq("user_id",state.user.id).maybeSingle();
-        if(verify.error||!verify.data) throw new Error("The listing could not be verified after publishing. Please try again.");
-        msg.textContent="Listing published successfully. It is now visible in listings.";
-        setTimeout(()=>location.href="account.html",500);
+        if(verify.error||!verify.data)throw new Error("The listing could not be verified after publishing. Please try again.");
+        msg.textContent=uploadErrors.length
+          ?"Listing published successfully. It is visible in listings, but "+uploadErrors.length+" photo(s) could not be uploaded."
+          :"Listing published successfully. It is now visible in listings.";
+        setTimeout(()=>location.href="account.html",900);
       }catch(err){
-        // Only roll back when the listing itself or the required photo upload failed.
-        // Do not delete a successfully-created listing because an optional image metadata
-        // write failed: that was the cause of previously disappearing published ads.
-        if(listingId && !uploadedPaths.length){
-          await c.from("listings").delete().eq("id",listingId).eq("user_id",state.user.id);
+        // Once the listing row exists, do not delete it because a photo/storage operation failed.
+        // The listing remains active/public and can be repaired from the seller dashboard.
+        if(!listingId){
+          msg.textContent=err.message||"Could not publish listing."; console.error(err);
+        }else{
+          const check=await c.from("listings").select("id,status").eq("id",listingId).eq("user_id",state.user.id).maybeSingle();
+          if(!check.data)console.error("Published listing could not be re-read after an error.",err);
+          else{
+            msg.textContent="Listing was published and remains visible in listings. Some optional photo processing failed.";
+            setTimeout(()=>location.href="account.html",900);
+          }
         }
-        if(uploadedPaths.length && listingId && /storage|upload|Photo/i.test(String(err.message||""))){
-          try{await c.from("listing_images").delete().eq("listing_id",listingId).eq("user_id",state.user.id)}catch(_){}
-          try{await c.from("listings").delete().eq("id",listingId).eq("user_id",state.user.id)}catch(_){}
-          try{await c.storage.from("listing-photos").remove(uploadedPaths)}catch(_){}
-        }
-        msg.textContent=err.message||"Could not publish listing."; console.error(err);
       }finally{submit.disabled=false}
     });
   }
