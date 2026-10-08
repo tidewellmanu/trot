@@ -20,25 +20,26 @@
     return r.json();
   }
   async function loadListings(){
-    const c=client(); if(!c)return false;
+    // Public discovery must not depend on Supabase Auth/session initialization.
+    // The publishable key is sufficient for anonymous reads governed by RLS.
     return (async()=>{
-      let rows=[],error=null;
+      let rows=[],error=null,c=client();
       try{
-        const r=await c.from("listings").select("*").eq("status","active").order("created_at",{ascending:false});
-        rows=r.data||[]; error=r.error;
-      }catch(e){error=e;}
-      // Use the public REST endpoint as a deterministic fallback. This prevents a
-      // browser SDK/query-cache failure from hiding active public listings.
-      if(error||!rows.length){
+        rows=await publicRest("listings?select=*&status=eq.active&order=created_at.desc");
+      }catch(restError){
+        error=restError;
         try{
-          rows=await publicRest("listings?select=*&status=eq.active&order=created_at.desc");
-          error=null;
-        }catch(restError){
-          console.error("TrotroMall public listings:",error||restError);
-          state.listingsError=(error||restError).message||"Public listings could not be loaded.";
-          renderAll();
-          return false;
-        }
+          if(c){
+            const r=await c.from("listings").select("*").eq("status","active").order("created_at",{ascending:false});
+            rows=r.data||[]; error=r.error;
+          }
+        }catch(e){error=e;}
+      }
+      if(error && !rows.length){
+        console.error("TrotroMall public listings:",error);
+        state.listingsError=error.message||"Public listings could not be loaded.";
+        renderAll();
+        return false;
       }
       state.listingsError=null;
       const ids=rows.map(x=>x.id);
@@ -47,15 +48,14 @@
         try{
           imageRows=await publicRest("listing_images?select=listing_id,storage_path,position&listing_id=in.("+ids.join(",")+")&order=position.asc");
         }catch(e){
-          const r=await c.from("listing_images").select("listing_id,storage_path,position").in("listing_id",ids).order("position",{ascending:true});
-          if(!r.error)imageRows=r.data||[];
+          if(c){const r=await c.from("listing_images").select("listing_id,storage_path,position").in("listing_id",ids).order("position",{ascending:true});if(!r.error)imageRows=r.data||[];}
         }
       }
       const storageUrl=p=>{
         if(!p)return "";
-        if(/^https?:\/\//i.test(String(p)))return String(p);
-        const result=c.storage.from("listing-photos").getPublicUrl(String(p));
-        return result?.data?.publicUrl||"";
+        if(/^https?:\\/\\//i.test(String(p)))return String(p);
+        const base=(window.TROTRO_SUPABASE_CONFIG||{}).url||"";
+        return base?base+"/storage/v1/object/public/listing-photos/"+String(p).split("/").map(encodeURIComponent).join("/"):"";
       };
       const grouped={};
       imageRows.forEach(i=>{
