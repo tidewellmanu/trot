@@ -30,28 +30,43 @@
     return (async()=>{
       let rows=[], loaded=false;
       const c=client();
-      // Read active listings directly through the Supabase client first. This is the
-      // normal browser path and is protected by the public SELECT/RLS policy.
-      if(c){
+      // Production source of truth: Vercel's public listings endpoint.
+      // This avoids browser-side reads being affected by a stale/partial client path.
+      try{
+        const r=await fetch("/api/public-listings",{method:"GET",headers:{Accept:"application/json"},cache:"no-store"});
+        if(r.ok){
+          const apiRows=await r.json();
+          if(Array.isArray(apiRows)){
+            rows=apiRows;
+            loaded=true;
+          }
+        }else{
+          console.warn("Public listings API returned:",r.status);
+        }
+      }catch(e){
+        console.warn("Public listings API unavailable:",e);
+      }
+
+      // Browser-side fallbacks are retained for local/static operation.
+      if(!loaded && c){
         try{
           const r=await c.from("listings").select("*").eq("status","active").order("created_at",{ascending:false});
-          if(!r.error && Array.isArray(r.data) && r.data.length){rows=r.data;loaded=true;}
-          else if(r.error)console.warn("Supabase active listings query failed:",r.error);
+          if(!r.error && Array.isArray(r.data)){
+            rows=r.data;
+            loaded=true;
+          }else if(r.error){
+            console.warn("Supabase active listings query failed:",r.error);
+          }
         }catch(e){console.warn("Supabase active listings query unavailable:",e);}
       }
-      // If the client query returns no rows or is unavailable, use the public RPC.
+
       if(!loaded){
         try{
           const rpc=await publicRpc("get_public_active_listings");
           if(Array.isArray(rpc)){rows=rpc;loaded=true;}
         }catch(e){console.warn("Public listing RPC request unavailable:",e);}
       }
-      if(!loaded && c){
-        try{
-          const rpc=await c.rpc("get_public_active_listings");
-          if(!rpc.error && Array.isArray(rpc.data)){rows=rpc.data;loaded=true;}
-        }catch(e){console.warn("Public listing client RPC unavailable:",e);}
-      }
+
       if(!loaded){
         try{
           rows=await publicRest("listings?select=*&status=eq.active&order=created_at.desc");
