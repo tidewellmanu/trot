@@ -20,48 +20,45 @@
     return r.json();
   }
   async function loadListings(){
-    const c=client(); if(!c)return false;
     return (async()=>{
-      let rows=[],error=null;
+      let rows=[];
       try{
-        const r=await c.from("listings").select("*").eq("status","active").order("created_at",{ascending:false});
-        rows=r.data||[]; error=r.error;
-      }catch(e){error=e;}
-      // Use the public REST endpoint as a deterministic fallback. This prevents a
-      // browser SDK/query-cache failure from hiding active public listings.
-      if(error||!rows.length){
-        try{
-          rows=await publicRest("listings?select=*&status=eq.active&order=created_at.desc");
-          error=null;
-        }catch(restError){
-          console.error("TrotroMall public listings:",error||restError);
-          state.listingsError=(error||restError).message||"Public listings could not be loaded.";
-          renderAll();
-          return false;
+        rows=await publicRest("listings?select=*&status=eq.active&order=created_at.desc");
+      }catch(restError){
+        const c=client();
+        if(c){
+          try{
+            const r=await c.from("listings").select("*").eq("status","active").order("created_at",{ascending:false});
+            if(!r.error) rows=r.data||[]; else throw r.error;
+          }catch(e){
+            console.error("TrotroMall public listings:",restError,e);
+            state.listingsError=(e||restError).message||"Public listings could not be loaded.";
+            state.data.listings=[]; renderAll(); return false;
+          }
+        }else{
+          console.error("TrotroMall public listings:",restError);
+          state.listingsError=restError.message||"Public listings could not be loaded.";
+          state.data.listings=[]; renderAll(); return false;
         }
       }
       state.listingsError=null;
-      const ids=rows.map(x=>x.id);
+      const ids=rows.map(x=>x.id).filter(Boolean);
       let imageRows=[];
       if(ids.length){
         try{
           imageRows=await publicRest("listing_images?select=listing_id,storage_path,position&listing_id=in.("+ids.join(",")+")&order=position.asc");
         }catch(e){
-          const r=await c.from("listing_images").select("listing_id,storage_path,position").in("listing_id",ids).order("position",{ascending:true});
-          if(!r.error)imageRows=r.data||[];
+          const c=client();
+          if(c){try{const r=await c.from("listing_images").select("listing_id,storage_path,position").in("listing_id",ids).order("position",{ascending:true});if(!r.error)imageRows=r.data||[];}catch(_){}}
         }
       }
       const storageUrl=p=>{
         if(!p)return "";
         if(/^https?:\/\//i.test(String(p)))return String(p);
-        const result=c.storage.from("listing-photos").getPublicUrl(String(p));
-        return result?.data?.publicUrl||"";
+        return (window.TROTRO_SUPABASE_CONFIG?.url||"")+"/storage/v1/object/public/listing-photos/"+String(p).replace(/^\/+/, "");
       };
       const grouped={};
-      imageRows.forEach(i=>{
-        const url=storageUrl(i.storage_path);
-        if(url)(grouped[i.listing_id] ||= []).push({url,position:i.position??0});
-      });
+      imageRows.forEach(i=>{const url=storageUrl(i.storage_path);if(url)(grouped[i.listing_id] ||= []).push({url,position:i.position??0});});
       state.data.listings=rows.map(x=>{
         const rowImages=(grouped[x.id]||[]).sort((a,b)=>a.position-b.position).map(i=>i.url);
         const legacy=Array.isArray(x.images)?x.images.map(storageUrl).filter(Boolean):[];
