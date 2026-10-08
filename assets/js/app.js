@@ -19,6 +19,13 @@
     if(!r.ok)throw new Error("Supabase public request failed ("+r.status+").");
     return r.json();
   }
+  async function publicRpc(fn,body={}){
+    const cfg=window.TROTRO_SUPABASE_CONFIG||{};
+    if(!cfg.url||!cfg.key)throw new Error("Supabase public configuration is missing.");
+    const r=await fetch(cfg.url+"/rest/v1/rpc/"+fn,{method:"POST",headers:{apikey:cfg.key,Authorization:"Bearer "+cfg.key,Accept:"application/json","Content-Type":"application/json"},body:JSON.stringify(body)});
+    if(!r.ok)throw new Error("Supabase public RPC request failed ("+r.status+").");
+    return r.json();
+  }
   async function loadListings(){
     return (async()=>{
       let rows=[], loaded=false;
@@ -26,7 +33,7 @@
       // Use the public RPC over PostgREST first. This works even if the browser Supabase client
       // is still initializing, and avoids the homepage ever falling back to an empty local array.
       try{
-        rows=await publicRest("rpc/get_public_active_listings");
+        rows=await publicRpc("get_public_active_listings");
         loaded=true;
       }catch(e){console.warn("Public listing RPC request unavailable:",e);}
       if(!loaded && c){
