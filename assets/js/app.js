@@ -21,24 +21,30 @@
   }
   async function loadListings(){
     return (async()=>{
-      let rows=[];
-      try{
-        rows=await publicRest("listings?select=*&status=eq.active&order=created_at.desc");
-      }catch(restError){
-        const c=client();
-        if(c){
-          try{
-            const r=await c.from("listings").select("*").eq("status","active").order("created_at",{ascending:false});
-            if(!r.error) rows=r.data||[]; else throw r.error;
-          }catch(e){
-            console.error("TrotroMall public listings:",restError,e);
-            state.listingsError=(e||restError).message||"Public listings could not be loaded.";
-            state.data.listings=[]; renderAll(); return false;
+      let rows=[], loaded=false;
+      const c=client();
+      if(c){
+        try{
+          const rpc=await c.rpc("get_public_active_listings");
+          if(!rpc.error){rows=rpc.data||[];loaded=true;}
+        }catch(e){console.warn("Public listing RPC unavailable:",e);}
+      }
+      if(!loaded){
+        try{
+          rows=await publicRest("listings?select=*&status=eq.active&order=created_at.desc");
+          loaded=true;
+        }catch(restError){
+          if(c){
+            try{
+              const r=await c.from("listings").select("*").eq("status","active").order("created_at",{ascending:false});
+              if(!r.error){rows=r.data||[];loaded=true;}
+            }catch(e){}
           }
-        }else{
-          console.error("TrotroMall public listings:",restError);
-          state.listingsError=restError.message||"Public listings could not be loaded.";
-          state.data.listings=[]; renderAll(); return false;
+          if(!loaded){
+            console.error("TrotroMall public listings:",restError);
+            state.listingsError=restError.message||"Public listings could not be loaded.";
+            state.data.listings=[];renderAll();return false;
+          }
         }
       }
       state.listingsError=null;
@@ -48,7 +54,6 @@
         try{
           imageRows=await publicRest("listing_images?select=listing_id,storage_path,position&listing_id=in.("+ids.join(",")+")&order=position.asc");
         }catch(e){
-          const c=client();
           if(c){try{const r=await c.from("listing_images").select("listing_id,storage_path,position").in("listing_id",ids).order("position",{ascending:true});if(!r.error)imageRows=r.data||[];}catch(_){}}
         }
       }
