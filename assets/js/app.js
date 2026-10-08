@@ -12,18 +12,44 @@
     const urls=images.length?images.map(i=>i.url||i.public_url).filter(Boolean):(Array.isArray(row.images)?row.images:[]);
     return {...row,image:urls[0]||"",images:urls,seller:row.seller_name||row.seller||"Seller",phone:row.seller_phone||"",condition:row.condition||"Used"};
   }
+  async function publicRest(path){
+    const cfg=window.TROTRO_SUPABASE_CONFIG||{};
+    if(!cfg.url||!cfg.key)throw new Error("Supabase public configuration is missing.");
+    const r=await fetch(cfg.url+"/rest/v1/"+path,{headers:{apikey:cfg.key,Authorization:"Bearer "+cfg.key,Accept:"application/json"}});
+    if(!r.ok)throw new Error("Supabase public request failed ("+r.status+").");
+    return r.json();
+  }
   async function loadListings(){
     const c=client(); if(!c)return false;
     return (async()=>{
-      const {data,error}=await c.from("listings").select("*").eq("status","active").order("created_at",{ascending:false});
-      if(error){console.error("TrotroMall listings:",error);state.listingsError=error.message;renderAll();return false;}
+      let rows=[],error=null;
+      try{
+        const r=await c.from("listings").select("*").eq("status","active").order("created_at",{ascending:false});
+        rows=r.data||[]; error=r.error;
+      }catch(e){error=e;}
+      // Use the public REST endpoint as a deterministic fallback. This prevents a
+      // browser SDK/query-cache failure from hiding active public listings.
+      if(error||!rows.length){
+        try{
+          rows=await publicRest("listings?select=*&status=eq.active&order=created_at.desc");
+          error=null;
+        }catch(restError){
+          console.error("TrotroMall public listings:",error||restError);
+          state.listingsError=(error||restError).message||"Public listings could not be loaded.";
+          renderAll();
+          return false;
+        }
+      }
       state.listingsError=null;
-      const rows=data||[];
       const ids=rows.map(x=>x.id);
       let imageRows=[];
       if(ids.length){
-        const r=await c.from("listing_images").select("listing_id,storage_path,position").in("listing_id",ids).order("position",{ascending:true});
-        if(!r.error) imageRows=r.data||[];
+        try{
+          imageRows=await publicRest("listing_images?select=listing_id,storage_path,position&listing_id=in.("+ids.join(",")+")&order=position.asc");
+        }catch(e){
+          const r=await c.from("listing_images").select("listing_id,storage_path,position").in("listing_id",ids).order("position",{ascending:true});
+          if(!r.error)imageRows=r.data||[];
+        }
       }
       const storageUrl=p=>{
         if(!p)return "";
