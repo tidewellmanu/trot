@@ -15,10 +15,31 @@
   async function loadListings(){
     const c=client(); if(!c)return false;
     return (async()=>{
-      const {data,error}=await c.from("listings").select("*").eq("status","active").order("created_at",{ascending:false});
-      if(error){console.error("TrotroMall listings:",error);state.listingsError=error.message;renderAll();return false;}
+      // Use the public discovery view first, then fall back to the base table.
+      // This keeps the public marketplace independent of seller-only dashboard queries.
+      let data=null,error=null;
+      const primary=await c.from("marketplace_discovery").select("*").order("created_at",{ascending:false});
+      data=primary.data; error=primary.error;
+      if(error){
+        console.warn("TrotroMall discovery view failed; falling back to listings table.",error);
+        const fallback=await c.from("listings").select("*").eq("status","active").order("created_at",{ascending:false});
+        data=fallback.data; error=fallback.error;
+      }
+      if(error){
+        // Retry once for transient CDN/network/auth initialization races.
+        await new Promise(r=>setTimeout(r,350));
+        const retry=await c.from("listings").select("*").eq("status","active").order("created_at",{ascending:false});
+        data=retry.data; error=retry.error;
+      }
+      if(error){
+        console.error("TrotroMall public listings:",error);
+        state.listingsError=error.message||"Unable to load public listings.";
+        state.data.listings=[];
+        renderAll();
+        return false;
+      }
       state.listingsError=null;
-      const rows=data||[];
+      const rows=(data||[]).filter(x=>String(x.status||"active").toLowerCase()==="active");
       const ids=rows.map(x=>x.id);
       let imageRows=[];
       if(ids.length){
@@ -27,7 +48,7 @@
       }
       const storageUrl=p=>{
         if(!p)return "";
-        if(/^https?:\/\//i.test(String(p)))return String(p);
+        if(/^https?:\\/\\/i.test(String(p)))return String(p);
         const result=c.storage.from("listing-photos").getPublicUrl(String(p));
         return result?.data?.publicUrl||"";
       };
