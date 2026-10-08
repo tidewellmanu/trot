@@ -22,7 +22,7 @@
   async function publicRpc(fn,body={}){
     const cfg=window.TROTRO_SUPABASE_CONFIG||{};
     if(!cfg.url||!cfg.key)throw new Error("Supabase public configuration is missing.");
-    const r=await fetch(cfg.url+"/rest/v1/rpc/"+fn,{method:"POST",headers:{apikey:cfg.key,Authorization:"Bearer "+cfg.key,Accept:"application/json","Content-Type":"application/json"},body:JSON.stringify(body)});
+    const r=await fetch(cfg.url+"/rest/v1/rpc/"+fn,{method:"POST",headers:{apikey:cfg.key,Accept:"application/json","Content-Type":"application/json"},body:JSON.stringify(body)});
     if(!r.ok)throw new Error("Supabase public RPC request failed ("+r.status+").");
     return r.json();
   }
