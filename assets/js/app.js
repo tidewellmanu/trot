@@ -8,9 +8,41 @@
   const client=()=>window.TROTRO_SUPABASE?.ready?window.TROTRO_SUPABASE.client:null;
   const authName=email=>String(email||"").split("@")[0].replace(/[._-]+/g," ").split(/\s+/).filter(Boolean).map(w=>w.charAt(0).toUpperCase()+w.slice(1).toLowerCase()).join(" ")||"User";
   const isFeatured=x=>Boolean(x.is_featured && x.featured_until && new Date(x.featured_until)>new Date());
+  function resolveImageUrl(p){
+    if(!p)return "";
+    if(typeof p==="object"){
+      p=p.url||p.publicUrl||p.public_url||p.storage_path||p.path||"";
+    }
+    const s=String(p).trim();
+    if(!s)return "";
+    if(/^https?:\/\/|^data:|^blob:/i.test(s))return s;
+    const base=window.TROTRO_SUPABASE_CONFIG?.url||"https://zqchpfdrtlfcokwmorln.supabase.co";
+    return base.replace(/\/+$/,"")+"/storage/v1/object/public/listing-photos/"+s.replace(/^\/+/, "");
+  }
   function normalize(row,images=[]){
-    const urls=images.length?images.map(i=>i.url||i.public_url).filter(Boolean):(Array.isArray(row.images)?row.images:[]);
-    return {...row,image:urls[0]||"",images:urls,seller:row.seller_name||row.seller||"Seller",phone:row.seller_phone||"",condition:row.condition||"Used"};
+    let raw=[];
+    if(Array.isArray(images)&&images.length){
+      raw=images;
+    }else if(Array.isArray(row.images)&&row.images.length){
+      raw=row.images;
+    }else if(typeof row.images==="string"&&row.images.trim()){
+      try{const parsed=JSON.parse(row.images);if(Array.isArray(parsed))raw=parsed;else raw=[row.images];}
+      catch(_){raw=row.images.startsWith("{")&&row.images.endsWith("}")?row.images.slice(1,-1).split(",").map(x=>x.trim().replace(/^["']|["']$/g,"")):[row.images];}
+    }else if(Array.isArray(row.image_urls)&&row.image_urls.length){
+      raw=row.image_urls;
+    }else if(row.image){
+      raw=[row.image];
+    }
+    const urls=[...new Set(raw.map(resolveImageUrl).filter(Boolean))];
+    const first=urls[0]||"assets/images/logo.png";
+    return {
+      ...row,
+      image:first,
+      images:urls.length?urls:[first],
+      seller:row.seller_name||row.seller||"Seller",
+      phone:row.seller_phone||"",
+      condition:row.condition||"Used"
+    };
   }
   async function publicRest(path){
     const cfg=window.TROTRO_SUPABASE_CONFIG||{};
@@ -87,18 +119,14 @@
           if(c){try{const r=await c.from("listing_images").select("listing_id,storage_path,position").in("listing_id",ids).order("position",{ascending:true});if(!r.error)imageRows=r.data||[];}catch(_){}}
         }
       }
-      const storageUrl=p=>{
-        if(!p)return "";
-        if(/^https?:\/\//i.test(String(p)))return String(p);
-        return (window.TROTRO_SUPABASE_CONFIG?.url||"")+"/storage/v1/object/public/listing-photos/"+String(p).replace(/^\/+/, "");
-      };
       const grouped={};
-      imageRows.forEach(i=>{const url=storageUrl(i.storage_path);if(url)(grouped[i.listing_id] ||= []).push({url,position:i.position??0});});
+      imageRows.forEach(i=>{const url=resolveImageUrl(i.storage_path);if(url)(grouped[i.listing_id] ||= []).push({url,position:i.position??0});});
       state.data.listings=rows.map(x=>{
         const rowImages=(grouped[x.id]||[]).sort((a,b)=>a.position-b.position).map(i=>i.url);
-        const legacy=Array.isArray(x.images)?x.images.map(storageUrl).filter(Boolean):[];
-        const direct=Array.isArray(x.image_urls)?x.image_urls.map(storageUrl).filter(Boolean):[];
-        const images=[...new Set([...rowImages,...legacy,...direct])];
+        const legacy=Array.isArray(x.images)?x.images.map(resolveImageUrl).filter(Boolean):[];
+        const direct=Array.isArray(x.image_urls)?x.image_urls.map(resolveImageUrl).filter(Boolean):[];
+        const single=x.image?[resolveImageUrl(x.image)]:[];
+        const images=[...new Set([...rowImages,...legacy,...direct,...single])];
         return normalize({...x,images},images);
       });
       renderAll();
@@ -122,9 +150,31 @@
   function renderHeaderFooter(){const h=$("#siteHeader");if(h)h.innerHTML=header();const f=$("#siteFooter");if(f)f.innerHTML=footer();const form=$("#globalSearch");form?.addEventListener("submit",e=>{e.preventDefault();const fd=new FormData(form);location.href=`search.html?q=${encodeURIComponent(fd.get("q")||"")}&category=${encodeURIComponent(fd.get("category")||"")}&location=${encodeURIComponent(fd.get("location")||"")}`;});}
   function card(x){const saved=state.saved.has(x.id),featured=isFeatured(x),imgs=x.images?.length?x.images:[x.image];return `<article class="card ${featured?"is-featured":""}">${featured?'<span class="featured-badge">Featured</span>':""}<button class="watch ${saved?"saved":""}" data-save="${esc(x.id)}" aria-label="${saved?"Remove from saved":"Save listing"}">${saved?"♥":"♡"}</button><a href="listing.html?id=${encodeURIComponent(x.id)}"><div class="card-img"><img loading="lazy" data-card-photo="${esc(x.id)}" src="${esc(imgs[0]||"")}" alt="${esc(x.title)} in ${esc(x.location)}" onerror="this.onerror=null;this.src=\'assets/images/logo.png\';">${imgs.length>1?`<button type="button" class="card-photo-arrow prev" data-card-step="-1" data-card-id="${esc(x.id)}" aria-label="Previous photo">‹</button><button type="button" class="card-photo-arrow next" data-card-step="1" data-card-id="${esc(x.id)}" aria-label="Next photo">›</button><span class="card-photo-count" data-card-count="${esc(x.id)}">1 / ${imgs.length}</span>`:""}</div><div class="card-body"><div class="card-title">${esc(x.title)}</div><div class="price">${esc(state.data.settings.currency||"GH₵")} ${esc(x.price)}</div><div class="meta"><span>${esc(x.location)}</span><span>${esc(x.category)}</span></div></div></a></article>`;}
   function bindSaved(){$("[data-card-step]").forEach(b=>b.addEventListener("click",e=>{e.preventDefault();e.stopPropagation();const id=b.dataset.cardId,x=state.data.listings.find(v=>String(v.id)===String(id));if(!x)return;const imgs=x.images?.length?x.images:[x.image];const im=$(`[data-card-photo="${id}"]`),counter=$(`[data-card-count="${id}"]`);let n=Number(im.dataset.photoIndex||0);n=(n+Number(b.dataset.cardStep)+imgs.length)%imgs.length;im.dataset.photoIndex=String(n);im.src=imgs[n];if(counter)counter.textContent=`${n+1} / ${imgs.length}`;}));$("[data-save]").forEach(b=>b.addEventListener("click",e=>{e.preventDefault();e.stopPropagation();const id=b.dataset.save;state.saved.has(id)?state.saved.delete(id):state.saved.add(id);saveSaved();b.classList.toggle("saved");b.textContent=state.saved.has(id)?"♥":"♡";}));}
-  function home(){const slides=state.data.slides||[],list=sortedListings();const hero=$("#homeHero");if(!hero)return;hero.innerHTML=slides.map((s,i)=>`<div class="hero-slide ${i===0?"active":""}" style="background-image:url('${esc(s.image)}')"><div class="hero-copy"><h1>${esc(s.title)}</h1><p>${esc(s.text)}</p><a class="primary-btn" href="search.html">${esc(s.button)}</a></div></div>`).join("")+`<div class="slider-controls">${slides.map((_,i)=>`<button aria-label="Show slide ${i+1}" class="${i===0?"active":""}" data-slide="${i}"></button>`).join("")}</div>`;let idx=0;const els=$$(".hero-slide",hero),dots=$$(".slider-controls button",hero);dots.forEach((d,i)=>d.onclick=()=>{idx=i;els.forEach((e,j)=>e.classList.toggle("active",j===idx));dots.forEach((e,j)=>e.classList.toggle("active",j===idx));});if(els.length>1)setInterval(()=>dots[(idx+1)%els.length]?.click(),5000);$("#deals").innerHTML=list.slice(0,8).map(card).join("")||`<div class="empty">${state.listingsError?`Listings could not load: ${esc(state.listingsError)}`:"No active listings yet."}</div>`;$("#latest").innerHTML=list.slice(0,12).map(card).join("")||'<div class="empty">No active listings yet.</div>';$("#homeCategories").innerHTML=state.data.categories.map(c=>`<div class="category-group"><h3>${esc(c.name)}</h3>${c.items.slice(0,8).map(x=>`<a href="search.html?category=${encodeURIComponent(c.name)}&sub=${encodeURIComponent(x)}">${esc(x)}</a>`).join("")}</div>`).join("");bindSaved();}
+  function home(){
+    const slides=state.data.slides||[],list=sortedListings();
+    const hero=$("#homeHero");
+    if(!hero)return;
+    hero.innerHTML=slides.map((s,i)=>`<div class="hero-slide ${i===0?"active":""}" style="background-image:url('${esc(s.image)}')"><div class="hero-copy"><h1>${esc(s.title)}</h1><p>${esc(s.text)}</p><a class="primary-btn" href="search.html">${esc(s.button)}</a></div></div>`).join("")+`<div class="slider-controls">${slides.map((_,i)=>`<button aria-label="Show slide ${i+1}" class="${i===0?"active":""}" data-slide="${i}"></button>`).join("")}</div>`;
+    let idx=0;
+    const els=$$(".hero-slide",hero),dots=$$(".slider-controls button",hero);
+    dots.forEach((d,i)=>d.onclick=()=>{idx=i;els.forEach((e,j)=>e.classList.toggle("active",j===idx));dots.forEach((e,j)=>e.classList.toggle("active",j===idx));});
+    if(els.length>1)setInterval(()=>dots[(idx+1)%els.length]?.click(),5000);
+
+    const dealsEl=$("#deals"), latestEl=$("#latest");
+    const featured=list.filter(isFeatured);
+    const deals=featured.length?featured.slice(0,8):list.slice(0,8);
+    const emptyMsg=state.listingsError
+      ?`<div class="empty" style="grid-column:1/-1">Listings could not load: ${esc(state.listingsError)}</div>`
+      :'<div class="empty" style="grid-column:1/-1">No active listings yet.</div>';
+
+    if(dealsEl) dealsEl.innerHTML=deals.map(card).join("")||emptyMsg;
+    if(latestEl) latestEl.innerHTML=list.slice(0,12).map(card).join("")||emptyMsg;
+
+    $("#homeCategories").innerHTML=state.data.categories.map(c=>`<div class="category-group"><h3>${esc(c.name)}</h3>${c.items.slice(0,8).map(x=>`<a href="search.html?category=${encodeURIComponent(c.name)}&sub=${encodeURIComponent(x)}">${esc(x)}</a>`).join("")}</div>`).join("");
+    bindSaved();
+  }
   function searchPage(){const p=new URLSearchParams(location.search),q=(p.get("q")||"").toLowerCase(),cat=p.get("category")||"",loc=p.get("location")||"",sub=(p.get("sub")||"").toLowerCase();let list=sortedListings().filter(x=>(!q||`${x.title} ${x.category} ${x.seller} ${x.location}`.toLowerCase().includes(q))&&(!cat||x.category===cat)&&(!loc||x.location===loc)&&(!sub||`${x.title} ${x.description||""}`.toLowerCase().includes(sub)));$("#resultCount").textContent=`${list.length} listings`;$("#categoryOptions").innerHTML='<option value="">All</option>'+state.data.categories.map(c=>`<option ${c.name===cat?"selected":""}>${esc(c.name)}</option>`).join("");$("#results").innerHTML=list.length?list.map(card).join(""):`<div class="empty panel" style="grid-column:1/-1">${state.listingsError?`Listings could not load: ${esc(state.listingsError)}`:"No listings match your search."}</div>`;bindSaved();$("#filterForm")?.addEventListener("submit",e=>{e.preventDefault();const fd=new FormData(e.currentTarget);location.href=`search.html?q=${encodeURIComponent(fd.get("q")||"")}&category=${encodeURIComponent(fd.get("category")||"")}&location=${encodeURIComponent(fd.get("location")||"")}`;});}
-  async function listingPage(){const id=new URLSearchParams(location.search).get("id"),c=client();if(!c||!id)return;const {data:x,error}=await c.from("listings").select("*").eq("id",id).eq("status","active").single();if(error||!x){$("#listing").innerHTML='<div class="empty panel">Listing not found.</div>';return;}const ir=await c.from("listing_images").select("storage_path,position").eq("listing_id",id).order("position",{ascending:true});const imageRows=(ir.data||[]).sort((a,b)=>(a.position??0)-(b.position??0));const storageUrl=p=>{if(!p)return "";if(/^https?:\/\//i.test(p))return p;return c.storage.from("listing-photos").getPublicUrl(p).data.publicUrl;};const galleryFromRows=imageRows.map(i=>storageUrl(i.storage_path)).filter(Boolean);const legacy=Array.isArray(x.images)?x.images.map(storageUrl).filter(Boolean):[];const imgs=[...new Set([...galleryFromRows,...legacy])];const item=normalize({...x,images:imgs},imgs);let pos=0;const featured=isFeatured(item);document.title=`${item.title} in ${item.location} | TrotroMall`;$("#listing").innerHTML=`<div><div class="breadcrumbs">Home / ${esc(item.category)} / ${esc(item.title)}</div><div class="gallery"><div class="gallery-main"><img id="mainPhoto" src="${esc(item.images[0])}" alt="${esc(item.title)}" onerror="this.onerror=null;this.src=\'assets/images/logo.png\';"></div><div class="gallery-controls"><button type="button" id="prevPhoto">‹</button><span id="photoPosition">1 / ${item.images.length}</span><button type="button" id="nextPhoto">›</button></div><div class="thumbs">${item.images.map((u,i)=>`<button class="thumb ${i===0?"active":""}" data-pos="${i}"><img src="${esc(u)}" alt="Photo ${i+1}"></button>`).join("")}</div></div><div class="detail-panel">${featured?'<div class="featured-inline">Featured listing</div>':""}<h1 class="detail-title">${esc(item.title)}</h1><div class="detail-meta">${esc(item.location)} · Listing #${esc(item.id)}</div><div class="detail-price">GH₵ ${esc(item.price)}</div><div class="specs"><div class="spec"><span>Category</span><strong>${esc(item.category)}</strong></div><div class="spec"><span>Seller</span><strong>${esc(item.seller)}</strong></div><div class="spec"><span>Condition</span><strong>${esc(item.condition)}</strong></div></div><h2 class="detail-heading">Description</h2><p>${esc(item.description||"Contact the seller for details.")}</p></div></div><aside><div class="seller-card"><div class="seller-name">${esc(item.seller)}</div><div class="detail-meta seller-location">${esc(item.location)}</div><a class="contact-btn primary" href="contact-seller.html?listing_id=${encodeURIComponent(item.id)}">Contact seller</a><button class="contact-btn" id="showPhone">Show phone number</button><div id="sellerPhone" class="seller-phone" hidden>${esc(item.phone||"Phone number not provided by seller")}</div><button class="contact-btn" data-save="${esc(item.id)}">${state.saved.has(item.id)?"♥ Saved":"♡ Save listing"}</button><div class="notice safety-note">Safety tip: meet in public, inspect the item and never share OTPs, passwords or card PINs.</div></div></aside>`;const set=i=>{pos=(i+item.images.length)%item.images.length;$("#mainPhoto").src=item.images[pos];$("#photoPosition").textContent=`${pos+1} / ${item.images.length}`;$$(".thumb").forEach((b,j)=>b.classList.toggle("active",j===pos));};$("#prevPhoto").onclick=()=>set(pos-1);$("#nextPhoto").onclick=()=>set(pos+1);$$(".thumb").forEach(b=>b.onclick=()=>set(+b.dataset.pos));$("#showPhone").onclick=()=>$("#sellerPhone").toggleAttribute("hidden");bindSaved();}
+  async function listingPage(){const id=new URLSearchParams(location.search).get("id"),c=client();if(!c||!id)return;const {data:x,error}=await c.from("listings").select("*").eq("id",id).eq("status","active").single();if(error||!x){$("#listing").innerHTML='<div class="empty panel">Listing not found.</div>';return;}const ir=await c.from("listing_images").select("storage_path,position").eq("listing_id",id).order("position",{ascending:true});const imageRows=(ir.data||[]).sort((a,b)=>(a.position??0)-(b.position??0));const storageUrl=p=>{if(!p)return "";if(/^https?:\/\//i.test(p))return p;return c.storage.from("listing-photos").getPublicUrl(p).data.publicUrl;};const galleryFromRows=imageRows.map(i=>resolveImageUrl(i.storage_path)).filter(Boolean);const legacy=Array.isArray(x.images)?x.images.map(resolveImageUrl).filter(Boolean):[];const direct=Array.isArray(x.image_urls)?x.image_urls.map(resolveImageUrl).filter(Boolean):[];const single=x.image?[resolveImageUrl(x.image)]:[];const imgs=[...new Set([...galleryFromRows,...legacy,...direct,...single])];const item=normalize({...x,images:imgs},imgs);let pos=0;const featured=isFeatured(item);document.title=`${item.title} in ${item.location} | TrotroMall`;$("#listing").innerHTML=`<div><div class="breadcrumbs">Home / ${esc(item.category)} / ${esc(item.title)}</div><div class="gallery"><div class="gallery-main"><img id="mainPhoto" src="${esc(item.images[0])}" alt="${esc(item.title)}" onerror="this.onerror=null;this.src=\'assets/images/logo.png\';"></div><div class="gallery-controls"><button type="button" id="prevPhoto">‹</button><span id="photoPosition">1 / ${item.images.length}</span><button type="button" id="nextPhoto">›</button></div><div class="thumbs">${item.images.map((u,i)=>`<button class="thumb ${i===0?"active":""}" data-pos="${i}"><img src="${esc(u)}" alt="Photo ${i+1}"></button>`).join("")}</div></div><div class="detail-panel">${featured?'<div class="featured-inline">Featured listing</div>':""}<h1 class="detail-title">${esc(item.title)}</h1><div class="detail-meta">${esc(item.location)} · Listing #${esc(item.id)}</div><div class="detail-price">GH₵ ${esc(item.price)}</div><div class="specs"><div class="spec"><span>Category</span><strong>${esc(item.category)}</strong></div><div class="spec"><span>Seller</span><strong>${esc(item.seller)}</strong></div><div class="spec"><span>Condition</span><strong>${esc(item.condition)}</strong></div></div><h2 class="detail-heading">Description</h2><p>${esc(item.description||"Contact the seller for details.")}</p></div></div><aside><div class="seller-card"><div class="seller-name">${esc(item.seller)}</div><div class="detail-meta seller-location">${esc(item.location)}</div><a class="contact-btn primary" href="contact-seller.html?listing_id=${encodeURIComponent(item.id)}">Contact seller</a><button class="contact-btn" id="showPhone">Show phone number</button><div id="sellerPhone" class="seller-phone" hidden>${esc(item.phone||"Phone number not provided by seller")}</div><button class="contact-btn" data-save="${esc(item.id)}">${state.saved.has(item.id)?"♥ Saved":"♡ Save listing"}</button><div class="notice safety-note">Safety tip: meet in public, inspect the item and never share OTPs, passwords or card PINs.</div></div></aside>`;const set=i=>{pos=(i+item.images.length)%item.images.length;$("#mainPhoto").src=item.images[pos];$("#photoPosition").textContent=`${pos+1} / ${item.images.length}`;$$(".thumb").forEach((b,j)=>b.classList.toggle("active",j===pos));};$("#prevPhoto").onclick=()=>set(pos-1);$("#nextPhoto").onclick=()=>set(pos+1);$$(".thumb").forEach(b=>b.onclick=()=>set(+b.dataset.pos));$("#showPhone").onclick=()=>$("#sellerPhone").toggleAttribute("hidden");bindSaved();}
   function requireAuth(){if(state.user)return true;location.href="login.html?next="+encodeURIComponent("add-listing.html");return false;}
   function addListing(){
     const form=$("#addForm"); if(!form)return;
@@ -218,21 +268,18 @@
       const ir=await c.from("listing_images").select("listing_id,storage_path,position").in("listing_id",ids).order("position",{ascending:true});
       if(!ir.error) imageRows=ir.data||[];
     }
-    const storageUrl=p=>{
-      if(!p)return "";
-      if(/^https?:\/\//i.test(String(p)))return String(p);
-      return c.storage.from("listing-photos").getPublicUrl(String(p)).data.publicUrl||"";
-    };
     const grouped={};
     imageRows.forEach(i=>{
-      const url=storageUrl(i.storage_path);
+      const url=resolveImageUrl(i.storage_path);
       if(url)(grouped[i.listing_id] ||= []).push({url,position:i.position??0});
     });
     const sellerListings=listings.map(x=>{
       const rowImages=(grouped[x.id]||[]).sort((a,b)=>a.position-b.position).map(i=>i.url);
-      const legacy=Array.isArray(x.images)?x.images.map(storageUrl).filter(Boolean):[];
-      const images=[...new Set([...rowImages,...legacy])];
-      return {...x,images,image:images[0]||"assets/images/logo.png"};
+      const legacy=Array.isArray(x.images)?x.images.map(resolveImageUrl).filter(Boolean):[];
+      const direct=Array.isArray(x.image_urls)?x.image_urls.map(resolveImageUrl).filter(Boolean):[];
+      const single=x.image?[resolveImageUrl(x.image)]:[];
+      const images=[...new Set([...rowImages,...legacy,...direct,...single])];
+      return normalize({...x,images},images);
     });
     const featured=listings.filter(isFeatured).length;
     const mr=await c.from("messages").select("id,listing_id,sender_name,body,created_at").in("listing_id",ids.length?ids:["00000000-0000-0000-0000-000000000000"]).order("created_at",{ascending:false});
@@ -271,7 +318,31 @@
     installPwa();
   }
   let bootStarted=false;
-  async function boot(){const c=client();if(!c||bootStarted)return;bootStarted=true;if(c){const {data:{session}}=await c.auth.getSession();state.user=session?.user||null;renderAll();c.auth.onAuthStateChange((_e,s)=>{state.user=s?.user||null;renderHeaderFooter();if($("#accountContent"))account();});await loadListings();bootStarted=false;}else{state.data.listings=[];renderAll();bootStarted=false;}}
-  document.addEventListener("DOMContentLoaded",()=>{registerPwa();boot();});
+  async function boot(){
+    if(bootStarted)return;
+    bootStarted=true;
+    renderAll();
+    const c=client();
+    if(c){
+      try{
+        const {data:{session}}=await c.auth.getSession();
+        state.user=session?.user||null;
+        renderHeaderFooter();
+        c.auth.onAuthStateChange((_e,s)=>{
+          state.user=s?.user||null;
+          renderHeaderFooter();
+          if($("#accountContent"))account();
+        });
+      }catch(e){console.warn("Session check error:",e);}
+    }
+    await loadListings();
+    bootStarted=false;
+  }
+  if(document.readyState==="loading"){
+    document.addEventListener("DOMContentLoaded",()=>{registerPwa();boot();});
+  }else{
+    registerPwa();
+    boot();
+  }
   document.addEventListener("trotro:supabase-ready",()=>boot());
 })();
