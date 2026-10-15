@@ -68,9 +68,13 @@
         const r=await fetch("/api/public-listings",{method:"GET",headers:{Accept:"application/json"},cache:"no-store"});
         if(r.ok){
           const apiRows=await r.json();
-          if(Array.isArray(apiRows)){
+          if(Array.isArray(apiRows) && apiRows.length){
             rows=apiRows;
             loaded=true;
+          }else if(Array.isArray(apiRows)){
+            // An empty API response must not hide listings that are available directly
+            // from Supabase (for example, while the API cache/source is being updated).
+            console.warn("Public listings API returned no rows; checking Supabase directly.");
           }
         }else{
           console.warn("Public listings API returned:",r.status);
