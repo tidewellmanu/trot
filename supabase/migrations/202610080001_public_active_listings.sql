@@ -3,6 +3,10 @@
 
 alter table public.listings enable row level security;
 
+-- Table privileges and RLS are separate: anon/authenticated need SELECT privilege,
+-- while the policy below limits which rows they can actually read.
+grant select on table public.listings to anon, authenticated;
+
 drop policy if exists "listings_public_read_active" on public.listings;
 
 create policy "listings_public_read_active"
