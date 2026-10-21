@@ -121,7 +121,16 @@
       state.listingsError=null;
       const ids=rows.map(x=>x.id).filter(Boolean);
       let imageRows=[];
-      if(ids.length){
+      // Most listings already include their public image URLs in the listing row.
+      // Avoid an extra round trip on the common path; query listing_images only
+      // when a row has no usable image field.
+      const needsImageRows=ids.length>0&&rows.some(x=>!(
+        (Array.isArray(x.images)&&x.images.length) ||
+        (typeof x.images==="string"&&x.images.trim()) ||
+        (Array.isArray(x.image_urls)&&x.image_urls.length) ||
+        x.image
+      ));
+      if(needsImageRows){
         try{
           imageRows=await publicRest("listing_images?select=listing_id,storage_path,position&listing_id=in.("+ids.join(",")+")&order=position.asc");
         }catch(e){
@@ -157,27 +166,8 @@
   }
   function footer(){return `<footer class="footer"><div class="container footer-inner"><div><h3>${esc(state.data.settings.siteName||"TrotroMall")}</h3><p>${esc(state.data.settings.tagline||"Everything you buy. Everything you sell.")}</p><p>Buy and sell across Ghana with local listings for people and businesses.</p></div><div><h3>Marketplace</h3><a href="search.html">Browse listings</a><a href="add-listing.html">Sell</a><a href="account.html">My account</a></div><div><h3>Business</h3><a href="business.html">Business accounts</a><a href="advertise.html">Featured listings</a></div><div><h3>Help</h3><a href="help.html">Help centre</a><a href="safety.html">Safety</a><a href="terms.html">Terms</a><a href="privacy.html">Privacy</a></div></div><div class="copyright"><div class="container">© ${new Date().getFullYear()} TrotroMall. All rights reserved.</div></div></footer>`;}
   function renderHeaderFooter(){const h=$("#siteHeader");if(h)h.innerHTML=header();const f=$("#siteFooter");if(f)f.innerHTML=footer();const form=$("#globalSearch");form?.addEventListener("submit",e=>{e.preventDefault();const fd=new FormData(form);location.href=`search.html?q=${encodeURIComponent(fd.get("q")||"")}&category=${encodeURIComponent(fd.get("category")||"")}&location=${encodeURIComponent(fd.get("location")||"")}`;});}
-  function card(x){const saved=state.saved.has(x.id),featured=isFeatured(x),imgs=x.images?.length?x.images:[x.image];return `<article class="card ${featured?"is-featured":""}">${featured?'<span class="featured-badge">Featured</span>':""}<button class="watch ${saved?"saved":""}" data-save="${esc(x.id)}" aria-label="${saved?"Remove from saved":"Save listing"}">${saved?"♥":"♡"}</button><a href="listing.html?id=${encodeURIComponent(x.id)}"><div class="card-img"><img loading="lazy" data-card-photo="${esc(x.id)}" src="${esc(imgs[0]||"")}" alt="${esc(x.title)} in ${esc(x.location)}" onerror="this.onerror=null;this.src=\'assets/images/logo.png\';">${imgs.length>1?`<button type="button" class="card-photo-arrow prev" data-card-step="-1" data-card-id="${esc(x.id)}" aria-label="Previous photo">‹</button><button type="button" class="card-photo-arrow next" data-card-step="1" data-card-id="${esc(x.id)}" aria-label="Next photo">›</button><span class="card-photo-count" data-card-count="${esc(x.id)}">1 / ${imgs.length}</span>`:""}</div><div class="card-body"><div class="card-title">${esc(x.title)}</div><div class="price">${esc(state.data.settings.currency||"GH₵")} ${esc(x.price)}</div><div class="meta"><span>${esc(x.location)}</span><span>${esc(x.category)}</span></div></div></a></article>`;}
+  function card(x){const saved=state.saved.has(x.id),featured=isFeatured(x),imgs=x.images?.length?x.images:[x.image];return `<article class="card ${featured?"is-featured":""}">${featured?'<span class="featured-badge">Featured</span>':""}<button class="watch ${saved?"saved":""}" data-save="${esc(x.id)}" aria-label="${saved?"Remove from saved":"Save listing"}">${saved?"♥":"♡"}</button><a href="listing.html?id=${encodeURIComponent(x.id)}"><div class="card-img"><img loading="lazy" decoding="async" fetchpriority="low" src="${esc(imgs[0]||"")}" alt="${esc(x.title)} in ${esc(x.location)}" onerror="this.onerror=null;this.src=\'assets/images/logo.png\';"></div><div class="card-body"><div class="card-title">${esc(x.title)}</div><div class="price">${esc(state.data.settings.currency||"GH₵")} ${esc(x.price)}</div><div class="meta"><span>${esc(x.location)}</span><span>${esc(x.category)}</span></div></div></a></article>`;}
   function bindSaved(){
-    // Use querySelectorAll for collections; pages can have zero photo arrows.
-    $$("[data-card-step]").forEach(b=>{
-      if(b.dataset.bound==="1")return;
-      b.dataset.bound="1";
-      b.addEventListener("click",e=>{
-        e.preventDefault();e.stopPropagation();
-        const id=b.dataset.cardId;
-        const x=state.data.listings.find(v=>String(v.id)===String(id));
-        if(!x)return;
-        const imgs=x.images?.length?x.images:[x.image].filter(Boolean);
-        if(!imgs.length)return;
-        const im=$(`[data-card-photo="${id}"]`),counter=$(`[data-card-count="${id}"]`);
-        if(!im)return;
-        let n=Number(im.dataset.photoIndex||0);
-        n=(n+Number(b.dataset.cardStep)+imgs.length)%imgs.length;
-        im.dataset.photoIndex=String(n);im.src=imgs[n];
-        if(counter)counter.textContent=`${n+1} / ${imgs.length}`;
-      });
-    });
     $$("[data-save]").forEach(b=>{
       if(b.dataset.bound==="1")return;
       b.dataset.bound="1";
@@ -432,6 +422,9 @@
     if(bootStarted)return;
     bootStarted=true;
     renderAll();
+    // Start the public listings request immediately so the marketplace can fill
+    // while auth initializes; auth must never block public listing display.
+    const listingsPromise=loadListings();
     const c=client();
     if(c){
       try{
@@ -445,7 +438,7 @@
         });
       }catch(e){console.warn("Session check error:",e);}
     }
-    await loadListings();
+    await listingsPromise;
     bootStarted=false;
   }
   if(document.readyState==="loading"){
