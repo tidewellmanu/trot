@@ -348,3 +348,19 @@ button,.primary-btn,.contact-btn,.payment-cta{box-shadow:none!important}
 .seller-photo-strip{display:flex;gap:6px;margin-top:8px;overflow:auto;max-width:100%}
 .seller-photo-strip img{width:42px;height:42px;flex:0 0 42px;object-fit:cover;border-radius:6px;background:#eef1f5}
 @media (max-width:700px){.seller-listing-image{width:100%;height:180px;flex-basis:auto}.seller-photo-strip img{width:48px;height:48px;flex-basis:48px}}
+
+/* Faster listing cards and clearer seller contact panel */
+.card-img{background:#f0f2f5;aspect-ratio:4/3;height:auto;min-height:118px}
+.card-img img{aspect-ratio:4/3;object-fit:cover}
+.seller-panel{align-self:start;position:sticky;top:16px;background:#fff;border:1px solid #e1e6ed;border-radius:12px;padding:20px;box-shadow:0 6px 24px rgba(28,42,60,.06)}
+.seller-panel h2{font-size:18px;line-height:1.25;margin:0 0 14px;color:var(--ink)}
+.seller-panel>p:first-of-type{font-size:15px;font-weight:700;margin:0 0 12px}
+.seller-panel #sellerPhone{margin:0 0 12px;padding:12px 14px;border:1px solid #e0e6ee;background:#f7f9fc;border-radius:8px;font-size:16px;font-weight:700;overflow-wrap:anywhere}
+.seller-panel .btn{display:flex;align-items:center;justify-content:center;width:100%;min-height:46px;padding:12px 14px;margin:9px 0 0;border-radius:8px;text-align:center;text-decoration:none;font:inherit;font-size:14px;font-weight:700;cursor:pointer}
+.seller-panel .btn-primary{background:var(--red);border:1px solid var(--red);color:#fff}
+.seller-panel .btn:not(.btn-primary){background:#fff;border:1px solid #d7dee8;color:var(--ink)}
+.seller-panel .safety-tip{margin-top:15px;padding:12px;background:#f7f9fc;border-radius:8px;color:#647187;font-size:12px;line-height:1.55}
+.card,.seller-panel,.detail-panel{contain:layout paint}
+img{content-visibility:auto}
+@media(max-width:720px){.seller-panel{position:static;margin-top:12px;padding:16px;border-radius:10px}.seller-panel h2{font-size:17px}.card-img{min-height:0}.listing-page{gap:12px}}
+@media(prefers-reduced-motion:reduce){html{scroll-behavior:auto}*,*::before,*::after{animation-duration:.01ms!important;animation-iteration-count:1!important;transition-duration:.01ms!important}}
