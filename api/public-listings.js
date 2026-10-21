@@ -28,7 +28,7 @@ export default async function handler(req,res){
 
     res
       .status(upstream.status)
-      .setHeader("Cache-Control","no-store, no-cache, must-revalidate")
+      .setHeader("Cache-Control","public, max-age=0, s-maxage=15, stale-while-revalidate=60")
       .setHeader("Content-Type","application/json")
       .send(text);
   }catch(error){
