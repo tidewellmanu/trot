@@ -159,9 +159,8 @@
   function renderHeaderFooter(){const h=$("#siteHeader");if(h)h.innerHTML=header();const f=$("#siteFooter");if(f)f.innerHTML=footer();const form=$("#globalSearch");form?.addEventListener("submit",e=>{e.preventDefault();const fd=new FormData(form);location.href=`search.html?q=${encodeURIComponent(fd.get("q")||"")}&category=${encodeURIComponent(fd.get("category")||"")}&location=${encodeURIComponent(fd.get("location")||"")}`;});}
   function card(x){const saved=state.saved.has(x.id),featured=isFeatured(x),imgs=x.images?.length?x.images:[x.image];return `<article class="card ${featured?"is-featured":""}">${featured?'<span class="featured-badge">Featured</span>':""}<button class="watch ${saved?"saved":""}" data-save="${esc(x.id)}" aria-label="${saved?"Remove from saved":"Save listing"}">${saved?"♥":"♡"}</button><a href="listing.html?id=${encodeURIComponent(x.id)}"><div class="card-img"><img loading="lazy" data-card-photo="${esc(x.id)}" src="${esc(imgs[0]||"")}" alt="${esc(x.title)} in ${esc(x.location)}" onerror="this.onerror=null;this.src=\'assets/images/logo.png\';">${imgs.length>1?`<button type="button" class="card-photo-arrow prev" data-card-step="-1" data-card-id="${esc(x.id)}" aria-label="Previous photo">‹</button><button type="button" class="card-photo-arrow next" data-card-step="1" data-card-id="${esc(x.id)}" aria-label="Next photo">›</button><span class="card-photo-count" data-card-count="${esc(x.id)}">1 / ${imgs.length}</span>`:""}</div><div class="card-body"><div class="card-title">${esc(x.title)}</div><div class="price">${esc(state.data.settings.currency||"GH₵")} ${esc(x.price)}</div><div class="meta"><span>${esc(x.location)}</span><span>${esc(x.category)}</span></div></div></a></article>`;}
   function bindSaved(){
-    // These are collections: use querySelectorAll ($), not querySelector ($).
-    // A page may have no multi-photo cards, so never assume either collection is non-empty.
-    $("[data-card-step]").forEach(b=>{
+    // Use querySelectorAll for collections; pages can have zero photo arrows.
+    $$("[data-card-step]").forEach(b=>{
       if(b.dataset.bound==="1")return;
       b.dataset.bound="1";
       b.addEventListener("click",e=>{
@@ -179,7 +178,7 @@
         if(counter)counter.textContent=`${n+1} / ${imgs.length}`;
       });
     });
-    $("[data-save]").forEach(b=>{
+    $$("[data-save]").forEach(b=>{
       if(b.dataset.bound==="1")return;
       b.dataset.bound="1";
       b.addEventListener("click",e=>{
