@@ -183,7 +183,63 @@
     bindSaved();
   }
   function searchPage(){const p=new URLSearchParams(location.search),q=(p.get("q")||"").toLowerCase(),cat=p.get("category")||"",loc=p.get("location")||"",sub=(p.get("sub")||"").toLowerCase();let list=sortedListings().filter(x=>(!q||`${x.title} ${x.category} ${x.seller} ${x.location}`.toLowerCase().includes(q))&&(!cat||x.category===cat)&&(!loc||x.location===loc)&&(!sub||`${x.title} ${x.description||""}`.toLowerCase().includes(sub)));$("#resultCount").textContent=`${list.length} listings`;$("#categoryOptions").innerHTML='<option value="">All</option>'+state.data.categories.map(c=>`<option ${c.name===cat?"selected":""}>${esc(c.name)}</option>`).join("");$("#results").innerHTML=list.length?list.map(card).join(""):`<div class="empty panel" style="grid-column:1/-1">${state.listingsError?`Listings could not load: ${esc(state.listingsError)}`:"No listings match your search."}</div>`;bindSaved();$("#filterForm")?.addEventListener("submit",e=>{e.preventDefault();const fd=new FormData(e.currentTarget);location.href=`search.html?q=${encodeURIComponent(fd.get("q")||"")}&category=${encodeURIComponent(fd.get("category")||"")}&location=${encodeURIComponent(fd.get("location")||"")}`;});}
-  async function listingPage(){const id=new URLSearchParams(location.search).get("id"),c=client();if(!c||!id)return;const {data:x,error}=await c.from("listings").select("*").eq("id",id).eq("status","active").single();if(error||!x){$("#listing").innerHTML='<div class="empty panel">Listing not found.</div>';return;}const ir=await c.from("listing_images").select("storage_path,position").eq("listing_id",id).order("position",{ascending:true});const imageRows=(ir.data||[]).sort((a,b)=>(a.position??0)-(b.position??0));const storageUrl=p=>{if(!p)return "";if(/^https?:\/\//i.test(p))return p;return c.storage.from("listing-photos").getPublicUrl(p).data.publicUrl;};const galleryFromRows=imageRows.map(i=>resolveImageUrl(i.storage_path)).filter(Boolean);const legacy=Array.isArray(x.images)?x.images.map(resolveImageUrl).filter(Boolean):[];const direct=Array.isArray(x.image_urls)?x.image_urls.map(resolveImageUrl).filter(Boolean):[];const single=x.image?[resolveImageUrl(x.image)]:[];const imgs=[...new Set([...galleryFromRows,...legacy,...direct,...single])];const item=normalize({...x,images:imgs},imgs);let pos=0;const featured=isFeatured(item);document.title=`${item.title} in ${item.location} | TrotroMall`;$("#listing").innerHTML=`<div><div class="breadcrumbs">Home / ${esc(item.category)} / ${esc(item.title)}</div><div class="gallery"><div class="gallery-main"><img id="mainPhoto" src="${esc(item.images[0])}" alt="${esc(item.title)}" onerror="this.onerror=null;this.src=\'assets/images/logo.png\';"></div><div class="gallery-controls"><button type="button" id="prevPhoto">‹</button><span id="photoPosition">1 / ${item.images.length}</span><button type="button" id="nextPhoto">›</button></div><div class="thumbs">${item.images.map((u,i)=>`<button class="thumb ${i===0?"active":""}" data-pos="${i}"><img src="${esc(u)}" alt="Photo ${i+1}"></button>`).join("")}</div></div><div class="detail-panel">${featured?'<div class="featured-inline">Featured listing</div>':""}<h1 class="detail-title">${esc(item.title)}</h1><div class="detail-meta">${esc(item.location)} · Listing #${esc(item.id)}</div><div class="detail-price">GH₵ ${esc(item.price)}</div><div class="specs"><div class="spec"><span>Category</span><strong>${esc(item.category)}</strong></div><div class="spec"><span>Seller</span><strong>${esc(item.seller)}</strong></div><div class="spec"><span>Condition</span><strong>${esc(item.condition)}</strong></div></div><h2 class="detail-heading">Description</h2><p>${esc(item.description||"Contact the seller for details.")}</p></div></div><aside><div class="seller-card"><div class="seller-name">${esc(item.seller)}</div><div class="detail-meta seller-location">${esc(item.location)}</div><a class="contact-btn primary" href="contact-seller.html?listing_id=${encodeURIComponent(item.id)}">Contact seller</a><button class="contact-btn" id="showPhone">Show phone number</button><div id="sellerPhone" class="seller-phone" hidden>${esc(item.phone||"Phone number not provided by seller")}</div><button class="contact-btn" data-save="${esc(item.id)}">${state.saved.has(item.id)?"♥ Saved":"♡ Save listing"}</button><div class="notice safety-note">Safety tip: meet in public, inspect the item and never share OTPs, passwords or card PINs.</div></div></aside>`;const set=i=>{const total=item.images.length;if(!total)return;pos=((i%total)+total)%total;const main=$("#mainPhoto");if(main){main.onerror=()=>{main.onerror=null;main.src="assets/images/logo.png";};main.src=item.images[pos]||"assets/images/logo.png";main.alt=`${item.title} — photo ${pos+1}`;}const counter=$("#photoPosition");if(counter)counter.textContent=`${pos+1} / ${total}`;$(".thumb").forEach((b,j)=>{b.classList.toggle("active",j===pos);if(j===pos)b.scrollIntoView({block:"nearest",inline:"nearest",behavior:"smooth"});});};$("#prevPhoto").onclick=()=>set(pos-1);$("#nextPhoto").onclick=()=>set(pos+1);$(".thumb").forEach(b=>b.onclick=()=>set(Number(b.dataset.pos)||0));$("#showPhone").onclick=()=>$("#sellerPhone").toggleAttribute("hidden");bindSaved();}
+  function parseImageList(value){
+    if(Array.isArray(value))return value;
+    if(typeof value!=="string"||!value.trim())return [];
+    const s=value.trim();
+    try{const parsed=JSON.parse(s);if(Array.isArray(parsed))return parsed;if(typeof parsed==="string")return [parsed];}catch(_){}
+    if(s.startsWith("{")&&s.endsWith("}"))return s.slice(1,-1).split(",").map(v=>v.trim().replace(/^["']|["']$/g,"")).filter(Boolean);
+    return s.split(/[\\r\\n,]/).map(v=>v.trim()).filter(Boolean);
+  }
+  async function listingPage(){
+    const id=new URLSearchParams(location.search).get("id"),c=client();
+    if(!id)return;
+    if(!c){$("#listing").innerHTML='<div class="empty panel">Loading listing details… Please refresh in a moment.</div>';return;}
+    const {data:x,error}=await c.from("listings").select("*").eq("id",id).eq("status","active").single();
+    if(error||!x){$("#listing").innerHTML='<div class="empty panel">Listing not found.</div>';return;}
+    let imageRows=[];
+    try{
+      const ir=await c.from("listing_images").select("storage_path,position").eq("listing_id",id).order("position",{ascending:true});
+      if(!ir.error&&Array.isArray(ir.data))imageRows=ir.data;
+      else console.warn("Listing gallery table query failed; trying public REST:",ir.error);
+    }catch(e){console.warn("Listing gallery query failed; trying public REST:",e);}
+    if(!imageRows.length){
+      try{
+        const fallback=await publicRest("listing_images?select=storage_path,position&listing_id=eq."+encodeURIComponent(id)+"&order=position.asc");
+        if(Array.isArray(fallback))imageRows=fallback;
+      }catch(e){console.warn("Public listing gallery fallback failed:",e);}
+    }
+    imageRows.sort((a,b)=>(a.position??0)-(b.position??0));
+    const fromRows=imageRows.map(row=>resolveImageUrl(row.storage_path)).filter(Boolean);
+    const legacy=parseImageList(x.images).map(resolveImageUrl).filter(Boolean);
+    const direct=parseImageList(x.image_urls).map(resolveImageUrl).filter(Boolean);
+    const single=x.image?[resolveImageUrl(x.image)]:[];
+    const imgs=[...new Set([...fromRows,...legacy,...direct,...single].filter(Boolean))];
+    const item=normalize({...x,images:imgs},imgs);
+    let pos=0;
+    const featured=isFeatured(item);
+    document.title=`${item.title} in ${item.location} | TrotroMall`;
+    $("#listing").innerHTML=`<div><div class="breadcrumbs">Home / ${esc(item.category)} / ${esc(item.title)}</div><div class="gallery"><div class="gallery-main"><img id="mainPhoto" src="${esc(item.images[0])}" alt="${esc(item.title)}" onerror="this.onerror=null;this.src='assets/images/logo.png';"></div><div class="gallery-controls"><button type="button" id="prevPhoto" aria-label="Previous photo">‹</button><span id="photoPosition">1 / ${item.images.length}</span><button type="button" id="nextPhoto" aria-label="Next photo">›</button></div><div class="thumbs">${item.images.map((u,i)=>`<button type="button" class="thumb ${i===0?"active":""}" data-pos="${i}" aria-label="Show photo ${i+1}"><img src="${esc(u)}" alt="Photo ${i+1}" loading="lazy"></button>`).join("")}</div></div><div class="detail-panel">${featured?'<div class="featured-inline">Featured listing</div>':""}<h1 class="detail-title">${esc(item.title)}</h1><div class="detail-meta">${esc(item.location)} · Listing #${esc(item.id)}</div><div class="detail-price">GH₵ ${esc(item.price)}</div><div class="specs"><div class="spec"><span>Category</span><strong>${esc(item.category)}</strong></div><div class="spec"><span>Condition</span><strong>${esc(item.condition)}</strong></div></div><p class="detail-description">${esc(item.description||"No description provided.")}</p></div></div><aside class="seller-panel"><h2>Seller information</h2><p>${esc(item.seller)}</p><p id="sellerPhone" hidden>${esc(item.phone||"Phone number not provided")}</p><button class="btn btn-primary" id="showPhone" type="button">Show phone number</button><div class="safety-tip">Safety tip: meet in public, inspect the item and never share OTPs, passwords or card PINs.</div></aside></div>`;
+    const set=i=>{
+      const total=item.images.length;
+      if(!total)return;
+      pos=((i%total)+total)%total;
+      const main=$("#mainPhoto");
+      if(main){
+        main.onerror=()=>{main.onerror=null;main.src="assets/images/logo.png";};
+        main.src=item.images[pos]||"assets/images/logo.png";
+        main.alt=`${item.title} — photo ${pos+1}`;
+      }
+      const counter=$("#photoPosition");
+      if(counter)counter.textContent=`${pos+1} / ${total}`;
+      $$(".thumb").forEach((b,j)=>{b.classList.toggle("active",j===pos);});
+    };
+    $("#prevPhoto").onclick=()=>set(pos-1);
+    $("#nextPhoto").onclick=()=>set(pos+1);
+    $$(".thumb").forEach(b=>b.onclick=()=>set(Number(b.dataset.pos)||0));
+    $("#showPhone").onclick=()=>$("#sellerPhone").toggleAttribute("hidden");
+    bindSaved();
+  }
   function requireAuth(){if(state.user)return true;location.href="login.html?next="+encodeURIComponent("add-listing.html");return false;}
   function addListing(){
     const form=$("#addForm"); if(!form)return;
