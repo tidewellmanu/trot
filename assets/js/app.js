@@ -189,7 +189,7 @@
     const s=value.trim();
     try{const parsed=JSON.parse(s);if(Array.isArray(parsed))return parsed;if(typeof parsed==="string")return [parsed];}catch(_){}
     if(s.startsWith("{")&&s.endsWith("}"))return s.slice(1,-1).split(",").map(v=>v.trim().replace(/^["']|["']$/g,"")).filter(Boolean);
-    return s.split(/[\\r\\n,]/).map(v=>v.trim()).filter(Boolean);
+    return s.split(/[,\r\n]/).map(v=>v.trim()).filter(Boolean);
   }
   async function listingPage(){
     const id=new URLSearchParams(location.search).get("id"),c=client();
