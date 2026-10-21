@@ -126,7 +126,7 @@
       // when a row has no usable image field.
       const needsImageRows=ids.length>0&&rows.some(x=>!(
         (Array.isArray(x.images)&&x.images.length) ||
-        (typeof x.images==="string"&&x.images.trim()) ||
+        (typeof x.images==="string"&&x.images.trim()&&x.images.trim()!=="[]"&&x.images.trim()!=="{}") ||
         (Array.isArray(x.image_urls)&&x.image_urls.length) ||
         x.image
       ));
