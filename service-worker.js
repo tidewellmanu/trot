@@ -1,4 +1,4 @@
-const CACHE="trotromall-v3";
+const CACHE="trotromall-v4";
 const CORE=["./","./index.html","./search.html","./listing.html","./assets/css/style.css","./assets/js/app.js","./assets/js/data.js","./assets/js/config.js","./assets/js/supabase-client.js","./assets/images/logo.png","./assets/images/favicon.png","./assets/images/apple-touch-icon.png","./site.webmanifest"];
 self.addEventListener("install",e=>e.waitUntil(caches.open(CACHE).then(c=>c.addAll(CORE)).then(()=>self.skipWaiting())));
 self.addEventListener("activate",e=>e.waitUntil(caches.keys().then(keys=>Promise.all(keys.filter(k=>k!==CACHE).map(k=>caches.delete(k)))).then(()=>self.clients.claim())));
