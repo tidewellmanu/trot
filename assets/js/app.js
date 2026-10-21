@@ -226,9 +226,22 @@
   async function listingPage(){
     const id=new URLSearchParams(location.search).get("id"),c=client();
     if(!id)return;
-    if(!c){$("#listing").innerHTML='<div class="empty panel">Loading listing details… Please refresh in a moment.</div>';return;}
-    const {data:x,error}=await c.from("listings").select("*").eq("id",id).eq("status","active").single();
-    if(error||!x){$("#listing").innerHTML='<div class="empty panel">Listing not found.</div>';return;}
+    let x=null;
+    if(c){
+      try{
+        const result=await c.from("listings").select("*").eq("id",id).eq("status","active").maybeSingle();
+        if(!result.error)x=result.data;
+        else console.warn("Listing detail query failed; trying public REST:",result.error);
+      }catch(e){console.warn("Listing detail client query failed; trying public REST:",e);}
+    }
+    // The public REST fallback also supports pages opened before the Supabase CDN client initializes.
+    if(!x){
+      try{
+        const rows=await publicRest("listings?select=*&id=eq."+encodeURIComponent(id)+"&status=eq.active&limit=1");
+        if(Array.isArray(rows))x=rows[0]||null;
+      }catch(e){console.error("Public listing detail request failed:",e);}
+    }
+    if(!x){$("#listing").innerHTML='<div class="empty panel">This listing could not be loaded. Please refresh and try again.</div>';return;}
     let imageRows=[];
     try{
       const ir=await c.from("listing_images").select("storage_path,position").eq("listing_id",id).order("position",{ascending:true});
