@@ -158,7 +158,40 @@
   function footer(){return `<footer class="footer"><div class="container footer-inner"><div><h3>${esc(state.data.settings.siteName||"TrotroMall")}</h3><p>${esc(state.data.settings.tagline||"Everything you buy. Everything you sell.")}</p><p>Buy and sell across Ghana with local listings for people and businesses.</p></div><div><h3>Marketplace</h3><a href="search.html">Browse listings</a><a href="add-listing.html">Sell</a><a href="account.html">My account</a></div><div><h3>Business</h3><a href="business.html">Business accounts</a><a href="advertise.html">Featured listings</a></div><div><h3>Help</h3><a href="help.html">Help centre</a><a href="safety.html">Safety</a><a href="terms.html">Terms</a><a href="privacy.html">Privacy</a></div></div><div class="copyright"><div class="container">© ${new Date().getFullYear()} TrotroMall. All rights reserved.</div></div></footer>`;}
   function renderHeaderFooter(){const h=$("#siteHeader");if(h)h.innerHTML=header();const f=$("#siteFooter");if(f)f.innerHTML=footer();const form=$("#globalSearch");form?.addEventListener("submit",e=>{e.preventDefault();const fd=new FormData(form);location.href=`search.html?q=${encodeURIComponent(fd.get("q")||"")}&category=${encodeURIComponent(fd.get("category")||"")}&location=${encodeURIComponent(fd.get("location")||"")}`;});}
   function card(x){const saved=state.saved.has(x.id),featured=isFeatured(x),imgs=x.images?.length?x.images:[x.image];return `<article class="card ${featured?"is-featured":""}">${featured?'<span class="featured-badge">Featured</span>':""}<button class="watch ${saved?"saved":""}" data-save="${esc(x.id)}" aria-label="${saved?"Remove from saved":"Save listing"}">${saved?"♥":"♡"}</button><a href="listing.html?id=${encodeURIComponent(x.id)}"><div class="card-img"><img loading="lazy" data-card-photo="${esc(x.id)}" src="${esc(imgs[0]||"")}" alt="${esc(x.title)} in ${esc(x.location)}" onerror="this.onerror=null;this.src=\'assets/images/logo.png\';">${imgs.length>1?`<button type="button" class="card-photo-arrow prev" data-card-step="-1" data-card-id="${esc(x.id)}" aria-label="Previous photo">‹</button><button type="button" class="card-photo-arrow next" data-card-step="1" data-card-id="${esc(x.id)}" aria-label="Next photo">›</button><span class="card-photo-count" data-card-count="${esc(x.id)}">1 / ${imgs.length}</span>`:""}</div><div class="card-body"><div class="card-title">${esc(x.title)}</div><div class="price">${esc(state.data.settings.currency||"GH₵")} ${esc(x.price)}</div><div class="meta"><span>${esc(x.location)}</span><span>${esc(x.category)}</span></div></div></a></article>`;}
-  function bindSaved(){$("[data-card-step]").forEach(b=>b.addEventListener("click",e=>{e.preventDefault();e.stopPropagation();const id=b.dataset.cardId,x=state.data.listings.find(v=>String(v.id)===String(id));if(!x)return;const imgs=x.images?.length?x.images:[x.image];const im=$(`[data-card-photo="${id}"]`),counter=$(`[data-card-count="${id}"]`);let n=Number(im.dataset.photoIndex||0);n=(n+Number(b.dataset.cardStep)+imgs.length)%imgs.length;im.dataset.photoIndex=String(n);im.src=imgs[n];if(counter)counter.textContent=`${n+1} / ${imgs.length}`;}));$("[data-save]").forEach(b=>b.addEventListener("click",e=>{e.preventDefault();e.stopPropagation();const id=b.dataset.save;state.saved.has(id)?state.saved.delete(id):state.saved.add(id);saveSaved();b.classList.toggle("saved");b.textContent=state.saved.has(id)?"♥":"♡";}));}
+  function bindSaved(){
+    // These are collections: use querySelectorAll ($), not querySelector ($).
+    // A page may have no multi-photo cards, so never assume either collection is non-empty.
+    $("[data-card-step]").forEach(b=>{
+      if(b.dataset.bound==="1")return;
+      b.dataset.bound="1";
+      b.addEventListener("click",e=>{
+        e.preventDefault();e.stopPropagation();
+        const id=b.dataset.cardId;
+        const x=state.data.listings.find(v=>String(v.id)===String(id));
+        if(!x)return;
+        const imgs=x.images?.length?x.images:[x.image].filter(Boolean);
+        if(!imgs.length)return;
+        const im=$(`[data-card-photo="${id}"]`),counter=$(`[data-card-count="${id}"]`);
+        if(!im)return;
+        let n=Number(im.dataset.photoIndex||0);
+        n=(n+Number(b.dataset.cardStep)+imgs.length)%imgs.length;
+        im.dataset.photoIndex=String(n);im.src=imgs[n];
+        if(counter)counter.textContent=`${n+1} / ${imgs.length}`;
+      });
+    });
+    $("[data-save]").forEach(b=>{
+      if(b.dataset.bound==="1")return;
+      b.dataset.bound="1";
+      b.addEventListener("click",e=>{
+        e.preventDefault();e.stopPropagation();
+        const id=b.dataset.save;
+        state.saved.has(id)?state.saved.delete(id):state.saved.add(id);
+        saveSaved();b.classList.toggle("saved");
+        b.textContent=state.saved.has(id)?"♥":"♡";
+        b.setAttribute("aria-label",state.saved.has(id)?"Remove from saved":"Save listing");
+      });
+    });
+  }
   function home(){
     const slides=state.data.slides||[],list=sortedListings();
     const hero=$("#homeHero");
