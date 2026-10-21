@@ -19,7 +19,6 @@ export default async function handler(req,res){
       method:"GET",
       headers:{
         apikey:key,
-        Authorization:"Bearer "+key,
         Accept:"application/json"
       },
       cache:"no-store"
