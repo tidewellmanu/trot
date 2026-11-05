@@ -57,7 +57,7 @@ export default async function handler(req,res){
     let structured="";
     if(!excluded){
       const product={"@context":"https://schema.org","@type":"Product","name":title,"description":description,"image":images.length?images:[image],"sku":String(item.id),"category":category,"itemCondition":/new/i.test(item.condition||"")?"https://schema.org/NewCondition":"https://schema.org/UsedCondition","offers":{"@type":"Offer","url":canonical,"priceCurrency":"GHS","availability":"https://schema.org/InStock","seller":{"@type":"Person","name":clean(item.seller_name||item.seller)||"TrotroMall seller"}}};
-      if(Number.isFinite(numericPrice)&&numericPrice>=0)product.offers.price=numericPrice.toFixed(2);
+      if(Number.isFinite(numericPrice)&&numericPrice>=0)product.offers.price=numericPrice.toFixed(2);else delete product.offers;
       structured='<script id="listingStructuredData" type="application/ld+json">'+JSON.stringify(product).replace(/</g,"\\u003c")+'</script>';
     }
     const gallery=images.map((src,index)=>'<img src="'+escapeHtml(src)+'" alt="'+escapeHtml(title+" in "+location+", Ghana — photo "+(index+1))+'">').join("");
