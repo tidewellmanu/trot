@@ -166,7 +166,7 @@
   }
   function footer(){return `<footer class="footer"><div class="container footer-inner"><div><h3>${esc(state.data.settings.siteName||"TrotroMall")}</h3><p>${esc(state.data.settings.tagline||"Everything you buy. Everything you sell.")}</p><p>Buy and sell across Ghana with local listings for people and businesses.</p></div><div><h3>Marketplace</h3><a href="search.html">Browse listings</a><a href="add-listing.html">Sell</a><a href="account.html">My account</a></div><div><h3>Business</h3><a href="business.html">Business accounts</a><a href="advertise.html">Featured listings</a></div><div><h3>Help</h3><a href="help.html">Help centre</a><a href="safety.html">Safety</a><a href="terms.html">Terms</a><a href="privacy.html">Privacy</a></div></div><div class="copyright"><div class="container">© ${new Date().getFullYear()} TrotroMall. All rights reserved.</div></div></footer>`;}
   function renderHeaderFooter(){const h=$("#siteHeader");if(h)h.innerHTML=header();const f=$("#siteFooter");if(f)f.innerHTML=footer();const form=$("#globalSearch");form?.addEventListener("submit",e=>{e.preventDefault();const fd=new FormData(form);location.href=`search.html?q=${encodeURIComponent(fd.get("q")||"")}&category=${encodeURIComponent(fd.get("category")||"")}&location=${encodeURIComponent(fd.get("location")||"")}`;});}
-  function card(x){const saved=state.saved.has(x.id),featured=isFeatured(x),imgs=x.images?.length?x.images:[x.image];return `<article class="card ${featured?"is-featured":""}">${featured?'<span class="featured-badge">Featured</span>':""}<button class="watch ${saved?"saved":""}" data-save="${esc(x.id)}" aria-label="${saved?"Remove from saved":"Save listing"}">${saved?"♥":"♡"}</button><a href="listing.html?id=${encodeURIComponent(x.id)}"><div class="card-img"><img loading="lazy" decoding="async" fetchpriority="low" src="${esc(imgs[0]||"")}" alt="${esc(x.title)} in ${esc(x.location)}" onerror="this.onerror=null;this.src=\'assets/images/logo.png\';"></div><div class="card-body"><div class="card-title">${esc(x.title)}</div><div class="price">${esc(state.data.settings.currency||"GH₵")} ${esc(x.price)}</div><div class="meta"><span>${esc(x.location)}</span><span>${esc(x.category)}</span></div></div></a></article>`;}
+  function card(x){const saved=state.saved.has(x.id),featured=isFeatured(x),imgs=x.images?.length?x.images:[x.image];return `<article class="card ${featured?"is-featured":""}">${featured?'<span class="featured-badge">Featured</span>':""}<button class="watch ${saved?"saved":""}" data-save="${esc(x.id)}" aria-label="${saved?"Remove from saved":"Save listing"}">${saved?"♥":"♡"}</button><a href="/listing/${encodeURIComponent(x.id)}"><div class="card-img"><img loading="lazy" decoding="async" fetchpriority="low" src="${esc(imgs[0]||"")}" alt="${esc(x.title)} in ${esc(x.location)}" onerror="this.onerror=null;this.src=\'assets/images/logo.png\';"></div><div class="card-body"><div class="card-title">${esc(x.title)}</div><div class="price">${esc(state.data.settings.currency||"GH₵")} ${esc(x.price)}</div><div class="meta"><span>${esc(x.location)}</span><span>${esc(x.category)}</span></div></div></a></article>`;}
   function bindSaved(){
     $$("[data-save]").forEach(b=>{
       if(b.dataset.bound==="1")return;
@@ -213,8 +213,42 @@
     if(s.startsWith("{")&&s.endsWith("}"))return s.slice(1,-1).split(",").map(v=>v.trim().replace(/^["']|["']$/g,"")).filter(Boolean);
     return s.split(/[,\r\n]/).map(v=>v.trim()).filter(Boolean);
   }
+
+  function setListingSeo(item){
+    const clean=value=>String(value??"").replace(/<[^>]*>/g," ").replace(/\s+/g," ").trim();
+    const title=clean(item.title)+" in "+clean(item.location||"Ghana")+" | TrotroMall Ghana";
+    const description=(clean(item.description)||("Browse "+clean(item.title)+" on TrotroMall Ghana. View the price, photos, condition and seller details." )).slice(0,160);
+    const canonical=new URL("/listing/"+encodeURIComponent(item.id),location.origin).href;
+    const image=item.images?.[0]?new URL(item.images[0],location.origin).href:new URL("/assets/images/logo.png",location.origin).href;
+    document.title=title;
+    const meta=(key,value,property=false)=>{
+      const selector=property?'meta[property="'+key+'"]':'meta[name="'+key+'"]';
+      let el=document.head.querySelector(selector);
+      if(!el){el=document.createElement("meta");el.setAttribute(property?"property":"name",key);document.head.appendChild(el);}
+      el.setAttribute("content",value);
+    };
+    meta("description",description);
+    meta("robots","index,follow,max-image-preview:large");
+    meta("og:type","website",true);meta("og:site_name","TrotroMall",true);
+    meta("og:title",title,true);meta("og:description",description,true);
+    meta("og:url",canonical,true);meta("og:image",image,true);
+    meta("og:image:alt",clean(item.title)+" listed for sale in "+clean(item.location||"Ghana")+", Ghana",true);
+    meta("twitter:card","summary_large_image");
+    meta("twitter:title",title);meta("twitter:description",description);meta("twitter:image",image);
+    let canonicalEl=document.head.querySelector('link[rel="canonical"]');
+    if(!canonicalEl){canonicalEl=document.createElement("link");canonicalEl.rel="canonical";document.head.appendChild(canonicalEl);}
+    canonicalEl.href=canonical;
+    const old=document.getElementById("listingStructuredData");if(old)old.remove();
+    const excluded=/property|jobs|services|rentals/i.test(String(item.category||""));
+    const price=Number(String(item.price??"").replace(/[^0-9.]/g,""));
+    if(!excluded){
+      const data={"@context":"https://schema.org","@type":"Product",name:clean(item.title),description:description,image:(item.images||[]).map(u=>new URL(u,location.origin).href),sku:String(item.id),category:clean(item.category),itemCondition:/new/i.test(item.condition||"")?"https://schema.org/NewCondition":"https://schema.org/UsedCondition",offers:{"@type":"Offer",url:canonical,priceCurrency:"GHS",availability:"https://schema.org/InStock",seller:{"@type":"Person",name:clean(item.seller||"TrotroMall seller")}}};
+      if(Number.isFinite(price)&&price>=0)data.offers.price=price.toFixed(2);
+      const script=document.createElement("script");script.id="listingStructuredData";script.type="application/ld+json";script.textContent=JSON.stringify(data);document.head.appendChild(script);
+    }
+  }
   async function listingPage(){
-    const id=new URLSearchParams(location.search).get("id"),c=client();
+    const id=new URLSearchParams(location.search).get("id")||location.pathname.split("/").filter(Boolean).pop(),c=client();
     if(!id)return;
     let x=null;
     if(c){
@@ -253,8 +287,8 @@
     const item=normalize({...x,images:imgs},imgs);
     let pos=0;
     const featured=isFeatured(item);
-    document.title=`${item.title} in ${item.location} | TrotroMall`;
-    $("#listing").innerHTML=`<div><div class="breadcrumbs">Home / ${esc(item.category)} / ${esc(item.title)}</div><div class="gallery"><div class="gallery-main"><img id="mainPhoto" src="${esc(item.images[0])}" alt="${esc(item.title)}" onerror="this.onerror=null;this.src='assets/images/logo.png';"></div><div class="gallery-controls"><button type="button" id="prevPhoto" aria-label="Previous photo">‹</button><span id="photoPosition">1 / ${item.images.length}</span><button type="button" id="nextPhoto" aria-label="Next photo">›</button></div><div class="thumbs">${item.images.map((u,i)=>`<button type="button" class="thumb ${i===0?"active":""}" data-pos="${i}" aria-label="Show photo ${i+1}"><img src="${esc(u)}" alt="Photo ${i+1}" loading="lazy"></button>`).join("")}</div></div><div class="detail-panel">${featured?'<div class="featured-inline">Featured listing</div>':""}<h1 class="detail-title">${esc(item.title)}</h1><div class="detail-meta">${esc(item.location)} · Listing #${esc(item.id)}</div><div class="detail-price">GH₵ ${esc(item.price)}</div><div class="specs"><div class="spec"><span>Category</span><strong>${esc(item.category)}</strong></div><div class="spec"><span>Condition</span><strong>${esc(item.condition)}</strong></div></div><p class="detail-description">${esc(item.description||"No description provided.")}</p></div></div><aside class="seller-panel"><h2>Seller information</h2><p>${esc(item.seller)}</p><p id="sellerPhone" hidden>${esc(item.phone||"Phone number not provided")}</p><a class="btn btn-primary" href="contact-seller.html?listing_id=${encodeURIComponent(item.id)}">Contact seller</a><button class="btn" data-save="${esc(item.id)}" type="button">${state.saved.has(item.id)?"♥ Saved":"♡ Save listing"}</button><button class="btn btn-primary" id="showPhone" type="button">Show phone number</button><div class="safety-tip">Safety tip: meet in public, inspect the item and never share OTPs, passwords or card PINs.</div></aside></div>`;
+    setListingSeo(item);
+    $("#listing").innerHTML=`<div><div class="breadcrumbs">Home / ${esc(item.category)} / ${esc(item.title)}</div><div class="gallery"><div class="gallery-main"><img id="mainPhoto" src="${esc(item.images[0])}" alt="${esc(item.title)} for sale in ${esc(item.location)}, Ghana" onerror="this.onerror=null;this.src='assets/images/logo.png';"></div><div class="gallery-controls"><button type="button" id="prevPhoto" aria-label="Previous photo">‹</button><span id="photoPosition">1 / ${item.images.length}</span><button type="button" id="nextPhoto" aria-label="Next photo">›</button></div><div class="thumbs">${item.images.map((u,i)=>`<button type="button" class="thumb ${i===0?"active":""}" data-pos="${i}" aria-label="Show photo ${i+1}"><img src="${esc(u)}" alt="${esc(item.title)} in ${esc(item.location)}, Ghana — photo ${i+1}" loading="lazy"></button>`).join("")}</div></div><div class="detail-panel">${featured?'<div class="featured-inline">Featured listing</div>':""}<h1 class="detail-title">${esc(item.title)}</h1><div class="detail-meta">${esc(item.location)} · Listing #${esc(item.id)}</div><div class="detail-price">GH₵ ${esc(item.price)}</div><div class="specs"><div class="spec"><span>Category</span><strong>${esc(item.category)}</strong></div><div class="spec"><span>Condition</span><strong>${esc(item.condition)}</strong></div></div><p class="detail-description">${esc(item.description||"No description provided.")}</p></div></div><aside class="seller-panel"><h2>Seller information</h2><p>${esc(item.seller)}</p><p id="sellerPhone" hidden>${esc(item.phone||"Phone number not provided")}</p><a class="btn btn-primary" href="contact-seller.html?listing_id=${encodeURIComponent(item.id)}">Contact seller</a><button class="btn" data-save="${esc(item.id)}" type="button">${state.saved.has(item.id)?"♥ Saved":"♡ Save listing"}</button><button class="btn btn-primary" id="showPhone" type="button">Show phone number</button><div class="safety-tip">Safety tip: meet in public, inspect the item and never share OTPs, passwords or card PINs.</div></aside></div>`;
     const set=i=>{
       const total=item.images.length;
       if(!total)return;
@@ -263,7 +297,7 @@
       if(main){
         main.onerror=()=>{main.onerror=null;main.src="assets/images/logo.png";};
         main.src=item.images[pos]||"assets/images/logo.png";
-        main.alt=`${item.title} — photo ${pos+1}`;
+        main.alt=`${item.title} in ${item.location||"Ghana"}, Ghana — photo ${pos+1}`;
       }
       const counter=$("#photoPosition");
       if(counter)counter.textContent=`${pos+1} / ${total}`;
@@ -384,7 +418,7 @@
     const featured=listings.filter(isFeatured).length;
     const mr=await c.from("messages").select("id,listing_id,sender_name,body,created_at").in("listing_id",ids.length?ids:["00000000-0000-0000-0000-000000000000"]).order("created_at",{ascending:false});
     const messages=mr.data||[];
-    box.innerHTML=`<section class="seller-dashboard"><div class="dashboard-head"><div><p class="eyebrow">Seller dashboard</p><h1>Welcome, ${esc(String(state.user.user_metadata?.full_name||state.user.user_metadata?.name||"").trim()||authName(state.user.email))}</h1><p class="muted">${esc(state.user.email)}</p></div><a class="add-btn" href="add-listing.html">＋ Sell</a></div><div class="dashboard-stats"><div><span>Listings</span><strong>${listings.length}</strong></div><div><span>Featured</span><strong>${featured}</strong></div><div><span>Messages</span><strong>${messages.length}</strong></div></div><div class="dashboard-card"><div class="section-head"><h2>My listings</h2><a href="add-listing.html">＋ Add listing</a></div><div class="seller-listings">${sellerListings.length?sellerListings.map(x=>`<article class="seller-listing"><div class="seller-listing-image"><img src="${esc(x.image)}" alt="${esc(x.title)}" loading="lazy" onerror="this.onerror=null;this.src='assets/images/logo.png';"></div><div class="seller-listing-info"><strong>${esc(x.title)}</strong><span>GH₵ ${esc(x.price)} · ${esc(x.location)}</span><small>${esc(x.status)}</small>${x.images.length>1?`<div class="seller-photo-strip">${x.images.slice(0,5).map((u,i)=>`<img src="${esc(u)}" alt="Photo ${i+1}" loading="lazy" onerror="this.style.display='none'">`).join("")}</div>`:""}</div><div class="seller-actions"><a class="action" href="listing.html?id=${encodeURIComponent(x.id)}">View</a><a class="action" href="advertise.html?listing_id=${encodeURIComponent(x.id)}">Promote</a><button class="action danger" data-delete-listing="${esc(x.id)}">Delete</button></div></article>`).join(""):'<div class="empty">You have not published a listing yet.</div>'}</div></div><div class="dashboard-card"><h2>Account</h2><button class="action" id="signOutBtn">Sign out</button></div></section>`;
+    box.innerHTML=`<section class="seller-dashboard"><div class="dashboard-head"><div><p class="eyebrow">Seller dashboard</p><h1>Welcome, ${esc(String(state.user.user_metadata?.full_name||state.user.user_metadata?.name||"").trim()||authName(state.user.email))}</h1><p class="muted">${esc(state.user.email)}</p></div><a class="add-btn" href="add-listing.html">＋ Sell</a></div><div class="dashboard-stats"><div><span>Listings</span><strong>${listings.length}</strong></div><div><span>Featured</span><strong>${featured}</strong></div><div><span>Messages</span><strong>${messages.length}</strong></div></div><div class="dashboard-card"><div class="section-head"><h2>My listings</h2><a href="add-listing.html">＋ Add listing</a></div><div class="seller-listings">${sellerListings.length?sellerListings.map(x=>`<article class="seller-listing"><div class="seller-listing-image"><img src="${esc(x.image)}" alt="${esc(x.title)}" loading="lazy" onerror="this.onerror=null;this.src='assets/images/logo.png';"></div><div class="seller-listing-info"><strong>${esc(x.title)}</strong><span>GH₵ ${esc(x.price)} · ${esc(x.location)}</span><small>${esc(x.status)}</small>${x.images.length>1?`<div class="seller-photo-strip">${x.images.slice(0,5).map((u,i)=>`<img src="${esc(u)}" alt="Photo ${i+1}" loading="lazy" onerror="this.style.display='none'">`).join("")}</div>`:""}</div><div class="seller-actions"><a class="action" href="/listing/${encodeURIComponent(x.id)}">View</a><a class="action" href="advertise.html?listing_id=${encodeURIComponent(x.id)}">Promote</a><button class="action danger" data-delete-listing="${esc(x.id)}">Delete</button></div></article>`).join(""):'<div class="empty">You have not published a listing yet.</div>'}</div></div><div class="dashboard-card"><h2>Account</h2><button class="action" id="signOutBtn">Sign out</button></div></section>`;
     $$('[data-delete-listing]').forEach(b=>b.onclick=async()=>{
       if(!confirm("Delete this listing?"))return;
       const id=b.dataset.deleteListing;
