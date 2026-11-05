@@ -6,7 +6,7 @@ export default async function handler(req,res){
     const rows=[];
     const pageSize=1000;
     for(let offset=0;;offset+=pageSize){
-      const url=base+"/rest/v1/listings?select=id,updated_at,created_at&status=eq.active&order=created_at.desc&limit="+pageSize+"&offset="+offset;
+      const url=base+"/rest/v1/listings?select=id,created_at&status=eq.active&order=created_at.desc&limit="+pageSize+"&offset="+offset;
       const response=await fetch(url,{headers:{apikey:key,Accept:"application/json"}});
       if(!response.ok)throw new Error("Listings query failed: "+response.status);
       const page=await response.json();
@@ -16,7 +16,7 @@ export default async function handler(req,res){
     }
     const urls=rows.filter(row=>row.id).map(row=>{
       const loc="https://trotromall.com/listing/"+encodeURIComponent(row.id);
-      const date=row.updated_at||row.created_at;
+      const date=row.created_at;
       return "<url><loc>"+loc+"</loc>"+(date&&!Number.isNaN(Date.parse(date))?"<lastmod>"+new Date(date).toISOString().slice(0,10)+"</lastmod>":"")+"</url>";
     }).join("");
     const xml='<?xml version="1.0" encoding="UTF-8"?><urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">'+urls+"</urlset>";
