@@ -48,7 +48,7 @@ export default async function handler(req,res){
     const title=clean(item.title)||"Marketplace listing";
     const location=clean(item.location)||"Ghana";
     const category=clean(item.category);
-    const description=(clean(item.description)||("Browse "+title+" on TrotroMall Ghana. View photos, price, condition and seller details.")).slice(0,160);
+    const description=(title+" in "+location+", Ghana. "+(clean(item.description)||"Browse this listing on TrotroMall.")+(item.price!==undefined&&item.price!==null&&String(item.price).trim()?" Price: GH₵ "+clean(item.price)+".":"")).slice(0,160);
     const canonical="https://trotromall.com/listing/"+encodeURIComponent(id);
     const image=images[0]||"https://trotromall.com/assets/images/logo.png";
     const alt=title+" listed in "+location+", Ghana";
