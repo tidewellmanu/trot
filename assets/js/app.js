@@ -217,7 +217,7 @@
   function setListingSeo(item){
     const clean=value=>String(value??"").replace(/<[^>]*>/g," ").replace(/\s+/g," ").trim();
     const title=clean(item.title)+" in "+clean(item.location||"Ghana")+" | TrotroMall Ghana";
-    const description=(clean(item.description)||("Browse "+clean(item.title)+" on TrotroMall Ghana. View the price, photos, condition and seller details." )).slice(0,160);
+    const description=(clean(item.title)+" in "+clean(item.location||"Ghana")+", Ghana. "+(clean(item.description)||"Browse this listing on TrotroMall.")+(item.price!==undefined&&item.price!==null&&String(item.price).trim()?" Price: GH₵ "+clean(item.price)+".":"")).slice(0,160);
     const canonical=new URL("/listing/"+encodeURIComponent(item.id),location.origin).href;
     const image=item.images?.[0]?new URL(item.images[0],location.origin).href:new URL("/assets/images/logo.png",location.origin).href;
     document.title=title;
