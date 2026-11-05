@@ -243,7 +243,7 @@
     const price=Number(String(item.price??"").replace(/[^0-9.]/g,""));
     if(!excluded){
       const data={"@context":"https://schema.org","@type":"Product",name:clean(item.title),description:description,image:(item.images||[]).map(u=>new URL(u,location.origin).href),sku:String(item.id),category:clean(item.category),itemCondition:/new/i.test(item.condition||"")?"https://schema.org/NewCondition":"https://schema.org/UsedCondition",offers:{"@type":"Offer",url:canonical,priceCurrency:"GHS",availability:"https://schema.org/InStock",seller:{"@type":"Person",name:clean(item.seller||"TrotroMall seller")}}};
-      if(Number.isFinite(price)&&price>=0)data.offers.price=price.toFixed(2);
+      if(Number.isFinite(price)&&price>=0)data.offers.price=price.toFixed(2);else delete data.offers;
       const script=document.createElement("script");script.id="listingStructuredData";script.type="application/ld+json";script.textContent=JSON.stringify(data);document.head.appendChild(script);
     }
   }
